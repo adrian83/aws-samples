@@ -19,7 +19,7 @@ with open('cloudformation.yml', 'r') as cfn_template:
 client = boto3.client('cloudformation')
 
 response = client.create_stack(
-    StackName='EDU-BILLING-ALARM',
+    StackName='EDU-MIGRATION-EXAMPLE',
     TemplateBody=template,
     TimeoutInMinutes=10,
     OnFailure='DELETE',
