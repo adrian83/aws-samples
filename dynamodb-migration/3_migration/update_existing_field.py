@@ -1,11 +1,10 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import io
 import boto3
 import time
 import sys
 from boto3.dynamodb.conditions import Attr
-
 
 
 def scan_all(table, filter):
@@ -14,8 +13,11 @@ def scan_all(table, filter):
 
     while True:
 
-        scanResp = table.scan(FilterExpression=filter, ExclusiveStartKey=lastEvaluatedKey) if lastEvaluatedKey else table.scan(FilterExpression=filter)
-     
+        scanResp = table.scan(FilterExpression=filter,
+                              ExclusiveStartKey=lastEvaluatedKey) \
+                    if lastEvaluatedKey \
+                    else table.scan(FilterExpression=filter)
+
         items = scanResp["Items"]
         if not items:
             print("No more items to process")
@@ -42,7 +44,6 @@ if __name__ == "__main__":
         exit(1)
 
     dynamoDB = boto3.resource("dynamodb")
-
     table = dynamoDB.Table(sys.argv[1])
 
     migration_no = 5
@@ -50,17 +51,19 @@ if __name__ == "__main__":
 
     count = 0
     for item in scan_all(table, not_migrated):
-        
+
         # processing items goes here
         print(str(item))
 
-        table.update_item( 
+        table.update_item(
             Key={'id': item['id']},
             UpdateExpression='SET email = :val, migration = :mig',
-            ExpressionAttributeValues={':val': 'updated_' + item['email'], ':mig': migration_no}
+            ExpressionAttributeValues={
+                ':val': 'updated_' + item['email'],
+                ':mig': migration_no
+            }
         )
         time.sleep(1)
         count += 1
 
     print("Items processed: {0}".format(count))
-

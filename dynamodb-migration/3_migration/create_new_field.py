@@ -1,11 +1,10 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import io
 import boto3
 import time
 import sys
 from boto3.dynamodb.conditions import Attr
-
 
 
 def scan_all(table, filter):
@@ -14,8 +13,11 @@ def scan_all(table, filter):
 
     while True:
 
-        scanResp = table.scan(FilterExpression=filter, ExclusiveStartKey=lastEvaluatedKey) if lastEvaluatedKey else table.scan(FilterExpression=filter)
-     
+        scanResp = table.scan(FilterExpression=filter,
+                              ExclusiveStartKey=lastEvaluatedKey) \
+                    if lastEvaluatedKey \
+                    else table.scan(FilterExpression=filter)
+
         items = scanResp["Items"]
         if not items:
             print("No more items to process")
@@ -49,7 +51,7 @@ if __name__ == "__main__":
 
     count = 0
     for item in scan_all(table, no_age_condition):
-        
+
         # processing items goes here
         print(str(item))
 
@@ -66,4 +68,3 @@ if __name__ == "__main__":
         count += 1
 
     print("Items processed: {0}".format(count))
-

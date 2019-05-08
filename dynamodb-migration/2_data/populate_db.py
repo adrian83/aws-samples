@@ -1,9 +1,13 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 import io
 import boto3
 import time
 import sys
+
+missing_args_msg = "provide file path (source of data) and / or " \
+    "dynamodb table name (destination)"
 
 
 def batch(seq, batch_size):
@@ -14,22 +18,14 @@ def batch(seq, batch_size):
 if __name__ == "__main__":
 
     if len(sys.argv) < 3:
-        print("provide file path (source of data) and dynamodb table name (destination)")
+        print(missing_args_msg)
         exit(1)
 
     file_path = sys.argv[1]
     table_name = sys.argv[2]
 
     dynamodb = boto3.resource('dynamodb')
-
     table = dynamodb.Table(table_name)
-
-
-
-
-    # small documents (size is much smaller than 400kb)  
-
-
 
     items = []
     with open(file_path) as user_data:
@@ -50,13 +46,8 @@ if __name__ == "__main__":
 
     batches = [b for b in batch(items, 25)]
 
-    print(str(batches[0]))
-
-
     for batch in batches:
         with table.batch_writer() as writer:
             for item in batch:
                 writer.put_item(item)
         time.sleep(2)
-
-

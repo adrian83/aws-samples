@@ -1,4 +1,6 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
 import yaml
 import io
 import boto3
@@ -9,12 +11,15 @@ params = []
 template = ""
 
 
+def to_param(item):
+    return {"ParameterKey": item[0], "ParameterValue": str(item[1])}
+
 with open("parameters.yml", 'r') as params_file:
     params_dict = yaml.load(params_file)
-    params = [{"ParameterKey": item[0], "ParameterValue": str(item[1])} for item in params_dict.items()]
+    params = [to_param(item) for item in params_dict.items()]
 
 with open('cloudformation.yml', 'r') as cfn_template:
-    template=cfn_template.read()
+    template = cfn_template.read()
 
 client = boto3.client('cloudformation')
 
