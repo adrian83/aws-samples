@@ -5,6 +5,13 @@ RUN git clone https://github.com/adrian83/aws-samples.git
 
 
 
+WORKDIR aws-samples/echo-service
+
+RUN ls -al
+
+RUN go build
+
+CMD ["echo"]
 
 
 
