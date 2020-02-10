@@ -1,0 +1,217 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: Basic VPC configuration.
+
+Parameters:
+  Env:
+    Description: 'The Stacks Project Stage.'
+    Type: String
+    Default: 'dev'
+
+Mappings:
+  Config:
+    dev:
+      VpcCidr: '10.0.0.0/16'
+      PrivSubnet1Cidr: '10.0.0.0/24'
+      PrivSubnet2Cidr: '10.0.1.0/24'
+      PubSubnet1Cidr: '10.0.2.0/24'
+      PubSubnet2Cidr: '10.0.3.0/24'
+
+Resources:
+
+  # Specifies a VPC with the specified IPv4 CIDR block.
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !FindInMap [Config, !Ref Env, VpcCidr]
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+
+  # Specifies a subnet for a VPC.
+  PubSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - 0
+        - Fn::GetAZs: {Ref: 'AWS::Region'}
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [Config, !Ref Env, PubSubnet1Cidr]
+      MapPublicIpOnLaunch: true
+
+  PubSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - 1
+        - Fn::GetAZs: {Ref: 'AWS::Region'}
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [Config, !Ref Env, PubSubnet2Cidr]
+      MapPublicIpOnLaunch: true
+
+
+  PrivSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - 0
+        - Fn::GetAZs: {Ref: 'AWS::Region'}
+      VpcId: !Ref 'VPC'
+      CidrBlock: !FindInMap [Config, !Ref Env, PrivSubnet1Cidr]
+
+  PrivSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - 1
+        - Fn::GetAZs: {Ref: 'AWS::Region'}
+      VpcId: !Ref 'VPC'
+      CidrBlock: !FindInMap [Config, !Ref Env, PrivSubnet2Cidr]
+
+
+  # Allocates an internet gateway for use with a VPC
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  # Attaches an internet gateway, or a virtual private gateway to a VPC, 
+  # enabling connectivity between the internet and the VPC.
+  GatewayAttachement:
+    Type: AWS::EC2::VPCGatewayAttachment
+    DependsOn: [VPC, InternetGateway]
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # ------------------------------------------------
+  # --------- Public stuff -------------------------
+  # ------------------------------------------------
+
+  # Specifies a route table for a specified VPC. After you create a route table, 
+  # you can add routes and associate the table with a subnet.
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    DependsOn: [VPC]
+    Properties:
+      VpcId: !Ref VPC
+
+  # Specifies a route in a route table within a VPC.
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: [RouteTable, InternetGateway]
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  # Associates a subnet with a route table. The subnet and route table must be in the same VPC. 
+  # This association causes traffic originating from the subnet to be routed according to the 
+  # routes in the route table. A route table can be associated with multiple subnets.
+  PubSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn: [RouteTable, PubSubnet1]
+    Properties:
+      SubnetId: !Ref PubSubnet1
+      RouteTableId: !Ref RouteTable
+
+  PubSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn: [RouteTable, PubSubnet2]
+    Properties:
+      SubnetId: !Ref PubSubnet2
+      RouteTableId: !Ref RouteTable
+
+
+  # ------------------------------------------------
+  # --------- Private stuff ------------------------
+  # ------------------------------------------------
+
+  # Specifies an Elastic IP (EIP) address.
+  NatGateway1Attachment:
+    Type: AWS::EC2::EIP
+    DependsOn: GatewayAttachement
+    Properties:
+        Domain: vpc
+
+  NatGateway2Attachment:
+    Type: AWS::EC2::EIP
+    DependsOn: GatewayAttachement
+    Properties:
+        Domain: vpc
+
+  # Specifies a network address translation (NAT) gateway in the specified public subnet. 
+  # Use a NAT gateway to allow instances in a private subnet to connect to the Internet or 
+  # to other AWS services, but prevent the Internet from initiating a connection with those instances.
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    DependsOn: [NatGateway1Attachment, PubSubnet1]
+    Properties:
+      AllocationId: !GetAtt NatGateway1Attachment.AllocationId
+      SubnetId: !Ref PubSubnet1
+
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    DependsOn: [NatGateway2Attachment, PubSubnet2]
+    Properties:
+      AllocationId: !GetAtt NatGateway2Attachment.AllocationId
+      SubnetId: !Ref PubSubnet2
+
+  # Specifies a route table for a specified VPC. After you create a route table, 
+  # you can add routes and associate the table with a subnet.
+  PrivRouteTable1:
+    Type: AWS::EC2::RouteTable
+    DependsOn: VPC
+    Properties:
+      VpcId: !Ref VPC
+
+  PrivRouteTable2:
+    Type: AWS::EC2::RouteTable
+    DependsOn: VPC
+    Properties:
+      VpcId: !Ref VPC
+
+  # Specifies a route in a route table within a VPC.
+  PrivRoute1:
+    Type: AWS::EC2::Route
+    DependsOn: [PrivRouteTable1, NatGateway1]
+    Properties:
+      RouteTableId: !Ref PrivRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  PrivRoute2:
+    Type: AWS::EC2::Route
+    DependsOn: [PrivRouteTable2, NatGateway2]
+    Properties:
+      RouteTableId: !Ref PrivRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
+
+  # Associates a subnet with a route table. The subnet and route table must be in the same VPC. 
+  # This association causes traffic originating from the subnet to be routed according to the 
+  # routes in the route table. A route table can be associated with multiple subnets.
+  PrivRouteTable1Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn: [PrivRouteTable1, PrivSubnet1]
+    Properties:
+      RouteTableId: !Ref PrivRouteTable1
+      SubnetId: !Ref PrivSubnet1
+
+  PrivRouteTable2Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn: [PrivRouteTable2, PrivSubnet2]
+    Properties:
+      RouteTableId: !Ref PrivRouteTable2
+      SubnetId: !Ref PrivSubnet2
+
+Outputs:
+  Vpc:
+    Value: !Ref VPC
+
+  PubSubnet1:
+    Value: !Ref PubSubnet1
+
+  PubSubnet2:
+    Value: !Ref PubSubnet2

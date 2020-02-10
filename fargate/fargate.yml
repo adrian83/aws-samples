@@ -1,0 +1,120 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: Fargate configuration.
+
+Parameters:
+  Env:
+    Description: 'The Stacks Project Stage.'
+    Type: String
+    Default: 'dev'
+  Vpc:
+    Description: 'Vpc'
+    Type: String
+  PubSubnet1:
+    Description: 'Public subnet (1)'
+    Type: String
+  PubSubnet2:
+    Description: 'Public subnet (2)'
+    Type: String
+
+Resources:
+
+  LoadBalancersecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Access to the public facing load balancer
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+          # Allow access to ALB from anywhere on the internet
+          - CidrIp: 0.0.0.0/0
+            IpProtocol: -1
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+      - Key: idle_timeout.timeout_seconds
+        Value: '30'
+      Subnets:
+        # The load balancer is placed into the public subnets, so that traffic
+        # from the internet can reach the load balancer directly via the internet gateway
+        - !Ref PubSubnet1
+        - !Ref PubSubnet2
+      SecurityGroups: 
+        - !Ref LoadBalancersecurityGroup
+
+  SampleTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 6
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      Name: !Join ['-', ['SampleTargetGroup', !Ref Env]]
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 2
+      VpcId: !Ref Vpc
+
+  LoadBalancerHttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    DependsOn: LoadBalancer
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref SampleTargetGroup
+          Type: 'forward'
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [ecs-tasks.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - PolicyName: AmazonECSTaskExecutionRolePolicy
+          PolicyDocument:
+            Statement:
+            - Effect: Allow
+              Action:
+                # Allow the ECS Tasks to download images from ECR
+                - 'ecr:GetAuthorizationToken'
+                - 'ecr:BatchCheckLayerAvailability'
+                - 'ecr:GetDownloadUrlForLayer'
+                - 'ecr:BatchGetImage'
+
+                # Allow the ECS tasks to upload logs to CloudWatch
+                - 'logs:CreateLogStream'
+                - 'logs:PutLogEvents'
+              Resource: '*'
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn: [ECSTaskExecutionRole]
+    Properties:
+      # Family: !Ref 'ServiceName'
+      Cpu: '256'
+      Memory: '0.5GB'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      # TaskRoleArn:
+      ContainerDefinitions:
+        - Name: 'echo'
+          #Cpu: !Ref 'ContainerCpu'
+          #Memory: !Ref 'ContainerMemory'
+          Image: adrianb83/echo:1.0.2
+          PortMappings:
+            - ContainerPort: 8080
