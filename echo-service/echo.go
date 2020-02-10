@@ -19,7 +19,7 @@ func main() {
 }
 
 func startServer(router http.Handler) {
-	serverAddress := "localhost:8080"
+	serverAddress := ":8080"
 	server := &http.Server{Addr: serverAddress, Handler: router}
 
 	idleConnsClosed := make(chan struct{})

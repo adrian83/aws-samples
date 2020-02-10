@@ -11,7 +11,9 @@ RUN ls -al
 
 RUN go build
 
-CMD ["echo"]
+EXPOSE 8080
+
+CMD ["go", "run", "echo.go"]
 
 
 
