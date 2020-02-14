@@ -215,3 +215,9 @@ Outputs:
 
   PubSubnet2:
     Value: !Ref PubSubnet2
+
+  PrivSubnet1:
+    Value: !Ref PrivSubnet1
+
+  PrivSubnet2:
+    Value: !Ref PrivSubnet2

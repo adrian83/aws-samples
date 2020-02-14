@@ -16,6 +16,16 @@ Parameters:
   PubSubnet2:
     Description: 'Public subnet (2)'
     Type: String
+  PrivSubnet1:
+    Description: 'Private subnet (1)'
+    Type: String
+  PrivSubnet2:
+    Description: 'Private subnet (2)'
+    Type: String
+  LogGroupName:
+    Description: 'log group name'
+    Type: String
+    Default: 'EchoServiceLogs'
 
 Resources:
 
@@ -44,26 +54,33 @@ Resources:
       SecurityGroups: 
         - !Ref LoadBalancersecurityGroup
 
-  SampleTargetGroup:
+  TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      HealthCheckIntervalSeconds: 6
-      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 15
+      HealthCheckPath: /health
       HealthCheckProtocol: HTTP
-      HealthCheckTimeoutSeconds: 5
-      HealthyThresholdCount: 2
-      Name: !Join ['-', ['SampleTargetGroup', !Ref Env]]
-      Port: 80
+      HealthCheckTimeoutSeconds: 14
+      HealthyThresholdCount: 3
+      TargetType: ip
+      Name: 'echo'
+      Port: 8080
       Protocol: HTTP
       UnhealthyThresholdCount: 2
       VpcId: !Ref Vpc
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '5'
+        - Key: slow_start.duration_seconds
+          Value: "150"
+
 
   LoadBalancerHttpListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    DependsOn: LoadBalancer
+    DependsOn: [LoadBalancer, TargetGroup]
     Properties:
       DefaultActions:
-        - TargetGroupArn: !Ref SampleTargetGroup
+        - TargetGroupArn: !Ref TargetGroup
           Type: 'forward'
       LoadBalancerArn: !Ref LoadBalancer
       Port: 80
@@ -99,22 +116,145 @@ Resources:
                 - 'logs:PutLogEvents'
               Resource: '*'
 
+  ECSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [ecs.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+      - PolicyName: ecs-service
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+              # Rules which allow ECS to attach network interfaces to instances
+              # on your behalf in order for awsvpc networking mode to work right
+              - 'ec2:AttachNetworkInterface'
+              - 'ec2:CreateNetworkInterface'
+              - 'ec2:CreateNetworkInterfacePermission'
+              - 'ec2:DeleteNetworkInterface'
+              - 'ec2:DeleteNetworkInterfacePermission'
+              - 'ec2:Describe*'
+              - 'ec2:DetachNetworkInterface'
+
+              # Rules which allow ECS to update load balancers on your behalf
+              # with the information sabout how to send traffic to your containers
+              - 'elasticloadbalancing:DeregisterInstancesFromLoadBalancer'
+              - 'elasticloadbalancing:DeregisterTargets'
+              - 'elasticloadbalancing:Describe*'
+              - 'elasticloadbalancing:RegisterInstancesWithLoadBalancer'
+              - 'elasticloadbalancing:RegisterTargets'
+            Resource: '*'
+
+
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties: 
+      LogGroupName: !Ref LogGroupName
+      RetentionInDays: 14
+
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
-    DependsOn: [ECSTaskExecutionRole]
+    DependsOn: [ECSTaskExecutionRole, LogGroup]
     Properties:
-      # Family: !Ref 'ServiceName'
+      Family: 'echo'
       Cpu: '256'
       Memory: '0.5GB'
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
       ExecutionRoleArn: !Ref ECSTaskExecutionRole
-      # TaskRoleArn:
+      #TaskRoleArn: !Ref ECSRole
       ContainerDefinitions:
         - Name: 'echo'
           #Cpu: !Ref 'ContainerCpu'
           #Memory: !Ref 'ContainerMemory'
           Image: adrianb83/echo:1.0.2
+          LogConfiguration:
+            LogDriver: "awslogs"
+            Options:
+              awslogs-group: !Ref LogGroupName
+              awslogs-region: 'eu-west-1'
+              awslogs-stream-prefix: "echo"
           PortMappings:
             - ContainerPort: 8080
+              Protocol: 'tcp'
+
+  LoadBalancerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    DependsOn: [TargetGroup, LoadBalancerHttpListener]
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: 'forward'
+      Conditions:
+        - Field: path-pattern
+          Values: 
+          - '*'
+      ListenerArn: !Ref LoadBalancerHttpListener
+      Priority: 100
+
+
+  FargateContainerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Access to the Fargate containers
+      VpcId: !Ref Vpc
+
+  EcsSecurityGroupIngressFromPublicALB:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Ingress from the public ALB
+      GroupId: !Ref 'FargateContainerSecurityGroup'
+      IpProtocol: -1
+      SourceSecurityGroupId: !Ref LoadBalancersecurityGroup
+
+  EcsSecurityGroupIngressFromPrivateALB:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Ingress from the private ALB
+      GroupId: !Ref 'FargateContainerSecurityGroup'
+      IpProtocol: -1
+      SourceSecurityGroupId: !Ref LoadBalancersecurityGroup
+
+  EcsSecurityGroupIngressFromSelf:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Ingress from other containers in the same security group
+      GroupId: !Ref 'FargateContainerSecurityGroup'
+      IpProtocol: -1
+      SourceSecurityGroupId: !Ref 'FargateContainerSecurityGroup'
+
+  Service:
+    Type: AWS::ECS::Service
+    DependsOn: [FargateContainerSecurityGroup, ECSCluster, TaskDefinition, LoadBalancer, TargetGroup]
+    Properties:
+      ServiceName: 'echo'
+      Cluster: !Ref ECSCluster
+      LaunchType: FARGATE
+      HealthCheckGracePeriodSeconds: 20
+      # DeploymentConfiguration:
+      #   MaximumPercent: 200
+      #   MinimumHealthyPercent: 75
+      DesiredCount: 1
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref FargateContainerSecurityGroup
+          Subnets:
+            - !Ref PrivSubnet1
+            - !Ref PrivSubnet2
+      TaskDefinition: !Ref TaskDefinition
+      LoadBalancers:
+        - ContainerName: 'echo'
+          ContainerPort: 8080
+          TargetGroupArn: !Ref TargetGroup
+
+    

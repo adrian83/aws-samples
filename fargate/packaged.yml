@@ -1,0 +1,44 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: App deployed on fargate.
+Parameters:
+  Env:
+    Description: The Stacks Project Stage.
+    Type: String
+    Default: dev
+Resources:
+  VpcStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://s3.eu-west-1.amazonaws.com/cloudformation-deployments-bucket/693d8acf235fc535469f918d5c8aa82e.template
+      Parameters:
+        Env:
+          Ref: Env
+  FargateStack:
+    DependsOn: VpcStack
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://s3.eu-west-1.amazonaws.com/cloudformation-deployments-bucket/fdc17c1a25ad8bcfb4f1033326f0a3b8.template
+      Parameters:
+        Env:
+          Ref: Env
+        Vpc:
+          Fn::GetAtt:
+          - VpcStack
+          - Outputs.Vpc
+        PubSubnet1:
+          Fn::GetAtt:
+          - VpcStack
+          - Outputs.PubSubnet1
+        PubSubnet2:
+          Fn::GetAtt:
+          - VpcStack
+          - Outputs.PubSubnet2
+        PrivSubnet1:
+          Fn::GetAtt:
+          - VpcStack
+          - Outputs.PrivSubnet1
+        PrivSubnet2:
+          Fn::GetAtt:
+          - VpcStack
+          - Outputs.PrivSubnet2

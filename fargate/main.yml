@@ -27,3 +27,5 @@ Resources:
         Vpc: !GetAtt VpcStack.Outputs.Vpc
         PubSubnet1: !GetAtt VpcStack.Outputs.PubSubnet1
         PubSubnet2: !GetAtt VpcStack.Outputs.PubSubnet2
+        PrivSubnet1: !GetAtt VpcStack.Outputs.PrivSubnet1
+        PrivSubnet2: !GetAtt VpcStack.Outputs.PrivSubnet2
