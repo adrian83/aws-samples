@@ -11,8 +11,7 @@ Globals:
   Function:
     Timeout: 25
     MemorySize: 128
-    Handler: index.lambda_handler
-    Runtime: python3.6
+
 
 Resources:
 
@@ -101,6 +100,7 @@ Resources:
               return {"statusCode": 500, "body": "Internal server error:" + str(response)}
 
             return {"statusCode": 201, "body": json.dumps({'id':userId, 'firstName':body['firstName'], 'lastName':body['lastName']})}
+
 
   DeleteUserLambda:
     Type: "AWS::Lambda::Function"
