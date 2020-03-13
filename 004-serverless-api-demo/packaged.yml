@@ -88,7 +88,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName:
-        Fn::Sub: users-list-${Env}
+        Fn::Sub: user-list-${Env}
       Role:
         Fn::GetAtt:
         - UserLambdaRole
@@ -161,11 +161,6 @@ Resources:
                 uri:
                   Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateUserLambda.Arn}/invocations
             get:
-              parameters:
-                in: query
-                name: lastKey
-                required: false
-                type: string
               x-amazon-apigateway-integration:
                 httpMethod: POST
                 type: aws_proxy

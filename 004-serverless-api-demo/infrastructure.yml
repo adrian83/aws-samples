@@ -197,11 +197,6 @@ Resources:
                 type: "aws_proxy"
                 uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateUserLambda.Arn}/invocations'
             get:
-              parameters:
-                in: query
-                name: lastKey
-                required: false
-                type: string
               x-amazon-apigateway-integration:
                 httpMethod: "POST"
                 type: "aws_proxy"
