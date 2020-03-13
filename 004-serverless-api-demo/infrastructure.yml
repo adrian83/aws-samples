@@ -102,6 +102,45 @@ Resources:
             return {"statusCode": 201, "body": json.dumps({'id':userId, 'firstName':body['firstName'], 'lastName':body['lastName']})}
 
 
+  ListUsersLambda:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      FunctionName: !Sub 'user-list-${Env}'
+      Role: !GetAtt UserLambdaRole.Arn 
+      Handler: index.lambda_handler
+      Runtime: python3.6
+      Environment:
+        Variables:
+          USERS_TABLE_NAME: !Ref UsersDynamoDBTable
+      Code:
+        ZipFile: |
+          from __future__ import print_function
+          import boto3
+          import json
+          import os
+
+          def lambda_handler(event, context):
+            print(str(event))
+            table_name = os.environ['USERS_TABLE_NAME']
+            dynamodb = boto3.resource('dynamodb')
+            users_table = dynamodb.Table(table_name)
+
+            get_params = event['queryStringParameters']
+
+            last_key = get_params['lastKey'] if get_params and 'lastKey' in get_params else None
+            print("lastkey: " + str(last_key))
+
+            response = users_table.scan(Limit=10, ExclusiveStartKey={'id':last_key}) if last_key else users_table.scan(Limit=10)
+
+            if response['ResponseMetadata']['HTTPStatusCode'] != 200:
+              print("cannot fetch data: " + str(response))
+              return {"statusCode": 500, "body": "Internal server error:" + str(response)}
+
+            return {"statusCode": 200, "body": json.dumps({'users': response['Items']})}
+
+
+
+
   DeleteUserLambda:
     Type: "AWS::Lambda::Function"
     Properties:
@@ -157,6 +196,16 @@ Resources:
                 httpMethod: "POST"
                 type: "aws_proxy"
                 uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateUserLambda.Arn}/invocations'
+            get:
+              parameters:
+                in: query
+                name: lastKey
+                required: false
+                type: string
+              x-amazon-apigateway-integration:
+                httpMethod: "POST"
+                type: "aws_proxy"
+                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ListUsersLambda.Arn}/invocations'
           /v1/users/{userId}:
             delete:
               parameters:
@@ -187,3 +236,14 @@ Resources:
       FunctionName: !GetAtt DeleteUserLambda.Arn
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${UserAPIGateway}/*'
+
+  ListUsersLambdaApiGatewayPermission:
+    DependsOn: [ListUsersLambda, UserAPIGateway]
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:invokeFunction
+      FunctionName: !GetAtt ListUsersLambda.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${UserAPIGateway}/*'
+
+

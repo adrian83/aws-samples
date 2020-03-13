@@ -1,0 +1,227 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Parameters:
+  Env:
+    Description: environment
+    Type: String
+    Default: dev
+Globals:
+  Function:
+    Timeout: 25
+    MemorySize: 128
+Resources:
+  UsersDynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        Fn::Sub: users-${Env}
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      AttributeDefinitions:
+      - AttributeName: id
+        AttributeType: S
+      KeySchema:
+      - AttributeName: id
+        KeyType: HASH
+  UserLambdaRole:
+    DependsOn: UsersDynamoDBTable
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Action:
+          - sts:AssumeRole
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+      Policies:
+      - PolicyName: users-dynamodb-policy
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+            - dynamodb:*
+            Resource:
+            - Fn::GetAtt:
+              - UsersDynamoDBTable
+              - Arn
+      - PolicyName: users-logs-policy
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:*
+            Resource:
+            - arn:aws:logs:*:*:*
+  CreateUserLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: user-create-${Env}
+      Role:
+        Fn::GetAtt:
+        - UserLambdaRole
+        - Arn
+      Handler: index.lambda_handler
+      Runtime: python3.6
+      Environment:
+        Variables:
+          USERS_TABLE_NAME:
+            Ref: UsersDynamoDBTable
+      Code:
+        ZipFile: "from __future__ import print_function\nimport boto3\nimport json\n\
+          import os\nimport uuid\n\ndef lambda_handler(event, context):\n  print(str(event))\n\
+          \  users_table = os.environ['USERS_TABLE_NAME']\n  body = json.loads(event['body'])\n\
+          \n  if 'firstName' not in body or 'lastName' not in body:\n    print(\"\
+          invalid data: \" + str(body))\n    return {\"statusCode\": 400, \"body\"\
+          : \"Invalid input\"}\n\n  userId = str(uuid.uuid4())\n\n  dynamodb_client\
+          \ = boto3.client('dynamodb')\n  response = dynamodb_client.put_item(\n \
+          \   TableName=users_table, \n    Item={'id':{'S':userId}, 'firstName':{'S':body['firstName']},\
+          \ 'lastName':{'S':body['lastName']}})\n\n  if response['ResponseMetadata']['HTTPStatusCode']\
+          \ != 200:\n    print(\"cannot store data: \" + str(response))\n    return\
+          \ {\"statusCode\": 500, \"body\": \"Internal server error:\" + str(response)}\n\
+          \n  return {\"statusCode\": 201, \"body\": json.dumps({'id':userId, 'firstName':body['firstName'],\
+          \ 'lastName':body['lastName']})}\n"
+  ListUsersLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: users-list-${Env}
+      Role:
+        Fn::GetAtt:
+        - UserLambdaRole
+        - Arn
+      Handler: index.lambda_handler
+      Runtime: python3.6
+      Environment:
+        Variables:
+          USERS_TABLE_NAME:
+            Ref: UsersDynamoDBTable
+      Code:
+        ZipFile: "from __future__ import print_function\nimport boto3\nimport json\n\
+          import os\n\ndef lambda_handler(event, context):\n  print(str(event))\n\
+          \  table_name = os.environ['USERS_TABLE_NAME']\n  dynamodb = boto3.resource('dynamodb')\n\
+          \  users_table = dynamodb.Table(table_name)\n\n  get_params = event['queryStringParameters']\n\
+          \n  last_key = get_params['lastKey'] if get_params and 'lastKey' in get_params\
+          \ else None\n  print(\"lastkey: \" + str(last_key))\n\n  response = users_table.scan(Limit=10,\
+          \ ExclusiveStartKey={'id':last_key}) if last_key else users_table.scan(Limit=10)\n\
+          \n  if response['ResponseMetadata']['HTTPStatusCode'] != 200:\n    print(\"\
+          cannot fetch data: \" + str(response))\n    return {\"statusCode\": 500,\
+          \ \"body\": \"Internal server error:\" + str(response)}\n\n  return {\"\
+          statusCode\": 200, \"body\": json.dumps({'users': response['Items']})}\n"
+  DeleteUserLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: user-delete-${Env}
+      Role:
+        Fn::GetAtt:
+        - UserLambdaRole
+        - Arn
+      Handler: index.lambda_handler
+      Runtime: python3.6
+      Environment:
+        Variables:
+          USERS_TABLE_NAME:
+            Ref: UsersDynamoDBTable
+      Code:
+        ZipFile: "from __future__ import print_function\nimport boto3\nimport os\n\
+          \ndef lambda_handler(event, context):\n  print(str(event))\n  users_table\
+          \ = os.environ['USERS_TABLE_NAME']\n  userId = event['pathParameters']['userId']\n\
+          \n  dynamodb_client = boto3.client('dynamodb')\n  response = dynamodb_client.delete_item(\n\
+          \    TableName=users_table, \n    Key={'id': {'S': userId}})\n\n  if response['ResponseMetadata']['HTTPStatusCode']\
+          \ != 200:\n    print(\"cannot remove data: \" + str(response))\n    return\
+          \ {\"statusCode\": 500, \"body\": \"Internal server error:\" + str(response)}\n\
+          \n  return {\"statusCode\": 200}\n"
+  UserAPIGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name:
+        Fn::Sub: users-api-gateway-${Env}
+      StageName:
+        Ref: Env
+      MethodSettings:
+      - HttpMethod: '*'
+        MetricsEnabled: true
+        ResourcePath: /*
+      DefinitionBody:
+        swagger: '2.0'
+        info:
+          version: '2018-06-04T13:58:30Z'
+          title:
+            Ref: AWS::StackName
+        paths:
+          /v1/users:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateUserLambda.Arn}/invocations
+            get:
+              parameters:
+                in: query
+                name: lastKey
+                required: false
+                type: string
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ListUsersLambda.Arn}/invocations
+          /v1/users/{userId}:
+            delete:
+              parameters:
+              - name: userId
+                in: path
+                required: true
+                type: string
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteUserLambda.Arn}/invocations
+  CreateUserLambdaApiGatewayPermission:
+    DependsOn:
+    - CreateUserLambda
+    - UserAPIGateway
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:invokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - CreateUserLambda
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${UserAPIGateway}/*
+  DeleteUserLambdaApiGatewayPermission:
+    DependsOn:
+    - DeleteUserLambda
+    - UserAPIGateway
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:invokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - DeleteUserLambda
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${UserAPIGateway}/*
+  ListUsersLambdaApiGatewayPermission:
+    DependsOn:
+    - ListUsersLambda
+    - UserAPIGateway
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:invokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - ListUsersLambda
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${UserAPIGateway}/*
