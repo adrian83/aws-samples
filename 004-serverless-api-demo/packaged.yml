@@ -111,6 +111,37 @@ Resources:
           cannot fetch data: \" + str(response))\n    return {\"statusCode\": 500,\
           \ \"body\": \"Internal server error:\" + str(response)}\n\n  return {\"\
           statusCode\": 200, \"body\": json.dumps({'users': response['Items']})}\n"
+  UpdateUserLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: user-update-${Env}
+      Role:
+        Fn::GetAtt:
+        - UserLambdaRole
+        - Arn
+      Handler: index.lambda_handler
+      Runtime: python3.6
+      Environment:
+        Variables:
+          USERS_TABLE_NAME:
+            Ref: UsersDynamoDBTable
+      Code:
+        ZipFile: "from __future__ import print_function\nimport boto3\nimport json\n\
+          import os\n\ndef lambda_handler(event, context):\n  print(str(event))\n\
+          \  users_table = os.environ['USERS_TABLE_NAME']\n  user_id = event['pathParameters']['userId']\n\
+          \  body = json.loads(event['body'])\n\n  if 'firstName' not in body or 'lastName'\
+          \ not in body:\n    print(\"invalid data: \" + str(body))\n    return {\"\
+          statusCode\": 400, \"body\": \"Invalid input\"}\n\n  dynamodb_client = boto3.client('dynamodb')\n\
+          \  response = dynamodb_client.update_item(\n    TableName=users_table,\n\
+          \    Key={ 'id': { 'S': user_id } },\n    UpdateExpression=\"set firstName\
+          \ = :fn, lastName = :ln\",\n    ExpressionAttributeValues={\n      ':fn':\
+          \ { 'S': body['firstName'] },\n      ':ln': { 'S': body['lastName'] }\n\
+          \    },\n    ReturnValues=\"UPDATED_NEW\"\n  )\n\n  if response['ResponseMetadata']['HTTPStatusCode']\
+          \ != 200:\n    print(\"cannot store data: \" + str(response))\n    return\
+          \ {\"statusCode\": 500, \"body\": \"Internal server error:\" + str(response)}\n\
+          \n  return {\"statusCode\": 200, \"body\": json.dumps({'id':user_id, 'firstName':body['firstName'],\
+          \ 'lastName':body['lastName']})}\n"
   DeleteUserLambda:
     Type: AWS::Lambda::Function
     Properties:
@@ -178,6 +209,17 @@ Resources:
                 type: aws_proxy
                 uri:
                   Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteUserLambda.Arn}/invocations
+            put:
+              parameters:
+              - name: userId
+                in: path
+                required: true
+                type: string
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UpdateUserLambda.Arn}/invocations
   CreateUserLambdaApiGatewayPermission:
     DependsOn:
     - CreateUserLambda
@@ -216,6 +258,20 @@ Resources:
       FunctionName:
         Fn::GetAtt:
         - ListUsersLambda
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${UserAPIGateway}/*
+  UpdateUserLambdaApiGatewayPermission:
+    DependsOn:
+    - UpdateUserLambda
+    - UserAPIGateway
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:invokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - UpdateUserLambda
         - Arn
       Principal: apigateway.amazonaws.com
       SourceArn:
