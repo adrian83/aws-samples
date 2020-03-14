@@ -166,6 +166,32 @@ Resources:
           \ != 200:\n    print(\"cannot remove data: \" + str(response))\n    return\
           \ {\"statusCode\": 500, \"body\": \"Internal server error:\" + str(response)}\n\
           \n  return {\"statusCode\": 200}\n"
+  GetUserLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: user-get-${Env}
+      Role:
+        Fn::GetAtt:
+        - UserLambdaRole
+        - Arn
+      Handler: index.lambda_handler
+      Runtime: python3.6
+      Environment:
+        Variables:
+          USERS_TABLE_NAME:
+            Ref: UsersDynamoDBTable
+      Code:
+        ZipFile: "from __future__ import print_function\nimport boto3\nimport os\n\
+          import json\n\ndef lambda_handler(event, context):\n  print(str(event))\n\
+          \  users_table = os.environ['USERS_TABLE_NAME']\n  user_id = event['pathParameters']['userId']\n\
+          \n  dynamodb_client = boto3.client('dynamodb')\n  response = dynamodb_client.get_item(\n\
+          \    TableName=users_table,\n    Key={ 'id': { 'S': user_id } }\n  )\n\n\
+          \  if response['ResponseMetadata']['HTTPStatusCode'] != 200:\n    print(\"\
+          cannot get data: \" + str(response))\n    return {\"statusCode\": 500, \"\
+          body\": \"Internal server error:\" + str(response)}\n  \n  item = response['Item']\n\
+          \  print(str(item))\n\n  return {\"statusCode\": 200, \"body\": json.dumps({'id':\
+          \ item['id']['S'], 'firstName': item['firstName']['S'], 'lastName': item['lastName']['S']})}\n"
   UserAPIGateway:
     Type: AWS::Serverless::Api
     Properties:
@@ -220,6 +246,17 @@ Resources:
                 type: aws_proxy
                 uri:
                   Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UpdateUserLambda.Arn}/invocations
+            get:
+              parameters:
+              - name: userId
+                in: path
+                required: true
+                type: string
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetUserLambda.Arn}/invocations
   CreateUserLambdaApiGatewayPermission:
     DependsOn:
     - CreateUserLambda
@@ -272,6 +309,20 @@ Resources:
       FunctionName:
         Fn::GetAtt:
         - UpdateUserLambda
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${UserAPIGateway}/*
+  GetUserLambdaApiGatewayPermission:
+    DependsOn:
+    - GetUserLambda
+    - UserAPIGateway
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:invokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - GetUserLambda
         - Arn
       Principal: apigateway.amazonaws.com
       SourceArn:
