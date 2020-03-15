@@ -18,7 +18,7 @@
 
 #### Deployment:  
 
-`aws cloudformation deploy --template-file packaged.yml --stack-name api-demo --capabilities CAPABILITY_AUTO_EXPAND CAPABILITY_IAM`
+`aws cloudformation deploy --template-file infrastructure.yml --stack-name api-demo --capabilities CAPABILITY_IAM`
 
 
 #### Cleaning:  
