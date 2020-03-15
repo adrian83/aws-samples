@@ -55,6 +55,7 @@ func createRouter() *mux.Router {
 	r := mux.NewRouter()
 	r.HandleFunc("/health", healthHandler).Methods(http.MethodGet)
 	r.HandleFunc("/echo", echoHandler).Methods(http.MethodGet)
+	r.HandleFunc("/", echoHandler).Methods(http.MethodGet)
 	return r
 }
 
