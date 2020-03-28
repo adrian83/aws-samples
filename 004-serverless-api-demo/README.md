@@ -30,49 +30,49 @@
 
 ##### Before you start:
 1. Check your Region, by executing this command: `aws configure get region`
-2. Remeber Id of API Gateway with name 'users-api-gateway-dev'. List of API Gateways can be fetched by executing this command: `aws apigateway get-rest-apis`
+2. Remeber Id of API Gateway with name 'users-api-gateway'. List of API Gateways can be fetched by executing this command: `aws apigateway get-rest-apis`
 
 
 Generic URL to API Gateways is `https://<REST-API-ID>.execute-api.<AWS-REGION>.amazonaws.com/<STAGE>`
-Knowing, that our Stage is called 'dev' and having region name and API Gateway Id, we can create URL to Users API.
+Knowing, that our Stage is called 'api-demo' and having region name and API Gateway Id, we can create URL to Users API.
 
-In my case it's: `https://kyyvk41jk7.execute-api.eu-west-1.amazonaws.com/dev`
+In my case it's: `https://kyyvk41jk7.execute-api.eu-west-1.amazonaws.com/api-demo`
 
 ##### Creating users:  
 
 `curl -d '{"firstName":"John","lastName":"Smith"}' -X POST <API-URL>/v1/users`
 
-Example: `curl -d '{"firstName":"John","lastName":"Smith"}' -X POST https://kyyvk41jk7.execute-api.eu-west-1.amazonaws.com/dev/v1/users`
+Example: `curl -d '{"firstName":"John","lastName":"Smith"}' -X POST https://kyyvk41jk7.execute-api.eu-west-1.amazonaws.com/api-demo/v1/users`
 
 
 ##### Getting users by Id:
 
 `curl <API-URL>/v1/users/<USER-ID>`
 
-Example: `curl https://kyyvk41jk7.execute-api.eu-west-1.amazonaws.com/dev/v1/users/576ed3f8-c03c-4f86-88b8-ecd06b3e9893`
+Example: `curl https://kyyvk41jk7.execute-api.eu-west-1.amazonaws.com/api-demo/v1/users/576ed3f8-c03c-4f86-88b8-ecd06b3e9893`
 
 ##### Updating users:
 
 `curl -d '{"firstName":"Jack","lastName":"Kowalsky"}' -X PUT <API-URL>/v1/users/<USER-ID>`
 
-Example: `curl -d '{"firstName":"Jack","lastName":"Kowalsky"}' -X PUT https://kyyvk41jk7.execute-api.eu-west-1.amazonaws.com/dev/v1/users/cb576886-5c3c-448f-b9f2-00b58130d18e`
+Example: `curl -d '{"firstName":"Jack","lastName":"Kowalsky"}' -X PUT https://kyyvk41jk7.execute-api.eu-west-1.amazonaws.com/api-demo/v1/users/cb576886-5c3c-448f-b9f2-00b58130d18e`
 
 
 ##### Deleting users: 
 
 `curl -X DELETE <API-URL>/v1/users/<USER-ID>`
 
-Example: `curl -X DELETE https://kyyvk41jk7.execute-api.eu-west-1.amazonaws.com/dev/v1/users/576ed3f8-c03c-4f86-88b8-ecd06b3e9893`
+Example: `curl -X DELETE https://kyyvk41jk7.execute-api.eu-west-1.amazonaws.com/api-demo/v1/users/576ed3f8-c03c-4f86-88b8-ecd06b3e9893`
 
 
 ##### Listing users:
 
-`curl https://kyyvk41jk7.execute-api.eu-west-1.amazonaws.com/dev/v1/users`
+`curl https://kyyvk41jk7.execute-api.eu-west-1.amazonaws.com/api-demo/v1/users`
 
 or  
 
-`curl https://kyyvk41jk7.execute-api.eu-west-1.amazonaws.com/dev/v1/users?lastKey=<LAST-USER-ID-FROM-PREV-PAGE>`
+`curl https://kyyvk41jk7.execute-api.eu-west-1.amazonaws.com/api-demo/v1/users?lastKey=<LAST-USER-ID-FROM-PREV-PAGE>`
 
 
-Examples: `curl https://kyyvk41jk7.execute-api.eu-west-1.amazonaws.com/dev/v1/users` or `curl https://kyyvk41jk7.execute-api.eu-west-1.amazonaws.com/dev/v1/users?lastKey=c09e008d-e510-4bb4-9851-dc425bf35088`
+Examples: `curl https://kyyvk41jk7.execute-api.eu-west-1.amazonaws.com/api-demo/v1/users` or `curl https://kyyvk41jk7.execute-api.eu-west-1.amazonaws.com/api-demo/v1/users?lastKey=c09e008d-e510-4bb4-9851-dc425bf35088`
 
