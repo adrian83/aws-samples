@@ -68,10 +68,12 @@ Resources:
           import os
           import uuid
 
+          users_table = os.environ['USERS_TABLE_NAME']
+          dynamodb_client = boto3.client('dynamodb')
+
           def lambda_handler(event, context):
             print("event: {0}".format(event))
 
-            users_table = os.environ['USERS_TABLE_NAME']
             body = json.loads(event['body'])
 
             if 'firstName' not in body or 'lastName' not in body:
@@ -82,7 +84,6 @@ Resources:
             first_name = body['firstName']
             last_name = body['lastName']
 
-            dynamodb_client = boto3.client('dynamodb')
             response = dynamodb_client.put_item(
               TableName=users_table, 
               Item={'id': {'S': user_id}, 'firstName': {'S': first_name}, 'lastName': {'S': last_name}})
@@ -113,17 +114,19 @@ Resources:
           import json
           import os
 
+          LIMIT = 10
+
+          table_name = os.environ['USERS_TABLE_NAME']
+          dynamodb = boto3.resource('dynamodb')
+          users_table = dynamodb.Table(table_name)
+
           def lambda_handler(event, context):
             print("event: {0}".format(event))
 
-            table_name = os.environ['USERS_TABLE_NAME']
-            dynamodb = boto3.resource('dynamodb')
-            users_table = dynamodb.Table(table_name)
-
             get_params = event['queryStringParameters']
-
             last_key = get_params['lastKey'] if get_params and 'lastKey' in get_params else None
-            response = users_table.scan(Limit=10, ExclusiveStartKey={'id': last_key}) if last_key else users_table.scan(Limit=10)
+
+            response = users_table.scan(Limit=LIMIT, ExclusiveStartKey={'id': last_key}) if last_key else users_table.scan(Limit=LIMIT)
 
             if response['ResponseMetadata']['HTTPStatusCode'] != 200:
               print("cannot execute scaning: {0}".format(response))
@@ -150,10 +153,12 @@ Resources:
           import json
           import os
 
+          users_table = os.environ['USERS_TABLE_NAME']
+          dynamodb_client = boto3.client('dynamodb')
+
           def lambda_handler(event, context):
             print("event: {0}".format(event))
 
-            users_table = os.environ['USERS_TABLE_NAME']
             user_id = event['pathParameters']['userId']
             body = json.loads(event['body'])
 
@@ -164,7 +169,6 @@ Resources:
             first_name = body['firstName']
             last_name = body['lastName']
 
-            dynamodb_client = boto3.client('dynamodb')
             response = dynamodb_client.update_item(
               TableName=users_table,
               Key={'id': {'S': user_id}},
@@ -201,13 +205,14 @@ Resources:
           import boto3
           import os
 
+          users_table = os.environ['USERS_TABLE_NAME']
+          dynamodb_client = boto3.client('dynamodb')
+
           def lambda_handler(event, context):
             print("event: {0}".format(event))
 
-            users_table = os.environ['USERS_TABLE_NAME']
             user_id = event['pathParameters']['userId']
 
-            dynamodb_client = boto3.client('dynamodb')
             response = dynamodb_client.delete_item(
               TableName=users_table, 
               Key={'id': {'S': user_id}})
@@ -237,13 +242,14 @@ Resources:
           import os
           import json
 
+          users_table = os.environ['USERS_TABLE_NAME']
+          dynamodb_client = boto3.client('dynamodb')
+
           def lambda_handler(event, context):
             print("event: {0}".format(event))
 
-            users_table = os.environ['USERS_TABLE_NAME']
             user_id = event['pathParameters']['userId']
 
-            dynamodb_client = boto3.client('dynamodb')
             response = dynamodb_client.get_item(
               TableName=users_table,
               Key={ 'id': { 'S': user_id } }
