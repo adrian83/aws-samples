@@ -311,6 +311,6 @@ Resources:
   UserAPIGateway:
     Type: AWS::Serverless::Api
     Properties:
-      Name: !Sub 'users-api-gateway'
+      Name: 'users-api-gateway'
       StageName: 'api-demo'
 
