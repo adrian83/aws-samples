@@ -49,7 +49,7 @@ Resources:
 
 
   CreateUserLambda:
-    Type: "AWS::Lambda::Function"
+    Type: AWS::Serverless::Function
     Properties:
       FunctionName: 'user-create'
       Role: !GetAtt UserLambdaRole.Arn 
@@ -60,8 +60,15 @@ Resources:
       Environment:
         Variables:
           USERS_TABLE_NAME: !Ref UsersDynamoDBTable
-      Code:
-        ZipFile: |
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Method: post
+            Path: /v1/users
+            RestApiId: 
+              Ref: UserAPIGateway
+      InlineCode: |
           from __future__ import print_function
           import boto3
           import json
@@ -96,7 +103,7 @@ Resources:
 
 
   ListUsersLambda:
-    Type: "AWS::Lambda::Function"
+    Type: AWS::Serverless::Function
     Properties:
       FunctionName: 'user-list'
       Role: !GetAtt UserLambdaRole.Arn 
@@ -107,8 +114,15 @@ Resources:
       Environment:
         Variables:
           USERS_TABLE_NAME: !Ref UsersDynamoDBTable
-      Code:
-        ZipFile: |
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Method: get
+            Path: /v1/users
+            RestApiId: 
+              Ref: UserAPIGateway
+      InlineCode: |
           from __future__ import print_function
           import boto3
           import json
@@ -135,7 +149,7 @@ Resources:
             return {"statusCode": 200, "body": json.dumps({'users': response['Items']})}
 
   UpdateUserLambda:
-    Type: "AWS::Lambda::Function"
+    Type: AWS::Serverless::Function
     Properties:
       FunctionName: 'user-update'
       Role: !GetAtt UserLambdaRole.Arn 
@@ -146,8 +160,15 @@ Resources:
       Environment:
         Variables:
           USERS_TABLE_NAME: !Ref UsersDynamoDBTable
-      Code:
-        ZipFile: |
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Method: put
+            Path: /v1/users/{userId}
+            RestApiId: 
+              Ref: UserAPIGateway
+      InlineCode: |
           from __future__ import print_function
           import boto3
           import json
@@ -188,7 +209,7 @@ Resources:
 
 
   DeleteUserLambda:
-    Type: "AWS::Lambda::Function"
+    Type: AWS::Serverless::Function
     Properties:
       FunctionName: 'user-delete'
       Role: !GetAtt UserLambdaRole.Arn 
@@ -199,8 +220,15 @@ Resources:
       Environment:
         Variables:
           USERS_TABLE_NAME: !Ref UsersDynamoDBTable
-      Code:
-        ZipFile: |
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Method: delete
+            Path: /v1/users/{userId}
+            RestApiId: 
+              Ref: UserAPIGateway
+      InlineCode: |
           from __future__ import print_function
           import boto3
           import os
@@ -224,7 +252,7 @@ Resources:
             return {"statusCode": 200}
 
   GetUserLambda:
-    Type: "AWS::Lambda::Function"
+    Type: AWS::Serverless::Function
     Properties:
       FunctionName: 'user-get'
       Role: !GetAtt UserLambdaRole.Arn 
@@ -235,8 +263,15 @@ Resources:
       Environment:
         Variables:
           USERS_TABLE_NAME: !Ref UsersDynamoDBTable
-      Code:
-        ZipFile: |
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Method: get
+            Path: /v1/users/{userId}
+            RestApiId: 
+              Ref: UserAPIGateway
+      InlineCode: |
           from __future__ import print_function
           import boto3
           import os
@@ -264,115 +299,18 @@ Resources:
               return {"statusCode": 404}
             
             item = response['Item']
-            id = item['id']['S']
-            first_name = item['firstName']['S']
-            last_name = item['lastName']['S']
 
-            return {"statusCode": 200, "body": json.dumps({'id': id, 'firstName': first_name, 'lastName': last_name})}
+            user = {
+              'id': item['id']['S'],
+              'firstName': item['firstName']['S'],
+              'lastName': item['lastName']['S']
+            }
 
-
+            return {"statusCode": 200, "body": json.dumps(user)}
 
   UserAPIGateway:
     Type: AWS::Serverless::Api
     Properties:
       Name: !Sub 'users-api-gateway'
       StageName: 'api-demo'
-      MethodSettings:
-        - HttpMethod: '*'
-          MetricsEnabled: true
-          ResourcePath: '/*'
-      DefinitionBody:
-        swagger: "2.0"
-        info:
-          version: "2018-06-04T13:58:30Z"
-          title:
-            Ref: AWS::StackName
-        paths:
-          /v1/users:
-            post:
-              x-amazon-apigateway-integration:
-                httpMethod: "POST"
-                type: "aws_proxy"
-                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateUserLambda.Arn}/invocations'
-            get:
-              x-amazon-apigateway-integration:
-                httpMethod: "POST"
-                type: "aws_proxy"
-                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ListUsersLambda.Arn}/invocations'
-          /v1/users/{userId}:
-            delete:
-              parameters:
-              - name: userId
-                in: path
-                required: true
-                type: string
-              x-amazon-apigateway-integration:
-                httpMethod: "POST"
-                type: "aws_proxy"
-                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteUserLambda.Arn}/invocations'
-            put:
-              parameters:
-              - name: userId
-                in: path
-                required: true
-                type: string
-              x-amazon-apigateway-integration:
-                httpMethod: "POST"
-                type: "aws_proxy"
-                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UpdateUserLambda.Arn}/invocations'
-            get:
-              parameters:
-              - name: userId
-                in: path
-                required: true
-                type: string
-              x-amazon-apigateway-integration:
-                httpMethod: "POST"
-                type: "aws_proxy"
-                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetUserLambda.Arn}/invocations'
 
-
-  CreateUserLambdaApiGatewayPermission:
-    DependsOn: [CreateUserLambda, UserAPIGateway]
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:invokeFunction
-      FunctionName: !GetAtt CreateUserLambda.Arn
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${UserAPIGateway}/*'
-
-  DeleteUserLambdaApiGatewayPermission:
-    DependsOn: [DeleteUserLambda, UserAPIGateway]
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:invokeFunction
-      FunctionName: !GetAtt DeleteUserLambda.Arn
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${UserAPIGateway}/*'
-
-  ListUsersLambdaApiGatewayPermission:
-    DependsOn: [ListUsersLambda, UserAPIGateway]
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:invokeFunction
-      FunctionName: !GetAtt ListUsersLambda.Arn
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${UserAPIGateway}/*'
-
-  UpdateUserLambdaApiGatewayPermission:
-    DependsOn: [UpdateUserLambda, UserAPIGateway]
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:invokeFunction
-      FunctionName: !GetAtt UpdateUserLambda.Arn
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${UserAPIGateway}/*'
-
-  GetUserLambdaApiGatewayPermission:
-    DependsOn: [GetUserLambda, UserAPIGateway]
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:invokeFunction
-      FunctionName: !GetAtt GetUserLambda.Arn
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${UserAPIGateway}/*'
