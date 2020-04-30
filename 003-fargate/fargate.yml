@@ -3,10 +3,6 @@ Transform: 'AWS::Serverless-2016-10-31'
 Description: Fargate configuration.
 
 Parameters:
-  Env:
-    Description: 'The Stacks Project Stage.'
-    Type: String
-    Default: 'dev'
   Vpc:
     Description: 'Vpc'
     Type: String
@@ -26,33 +22,18 @@ Parameters:
     Description: 'log group name'
     Type: String
     Default: 'EchoServiceLogs'
+  LoadBalancer:
+    Type: String  
+  LoadBalancerSecurityGroup:
+    Type: String  
+  FargateContainerSecurityGroup:
+    Type: String  
+  EcsTaskExecutionRole:
+    Type: String  
+  ECSCluster:
+    Type: String    
 
 Resources:
-
-  LoadBalancersecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Access to the public facing load balancer
-      VpcId: !Ref Vpc
-      SecurityGroupIngress:
-          # Allow access to ALB from anywhere on the internet
-          - CidrIp: 0.0.0.0/0
-            IpProtocol: -1
-
-  LoadBalancer:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Scheme: internet-facing
-      LoadBalancerAttributes:
-      - Key: idle_timeout.timeout_seconds
-        Value: '30'
-      Subnets:
-        # The load balancer is placed into the public subnets, so that traffic
-        # from the internet can reach the load balancer directly via the internet gateway
-        - !Ref PubSubnet1
-        - !Ref PubSubnet2
-      SecurityGroups: 
-        - !Ref LoadBalancersecurityGroup
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -77,7 +58,7 @@ Resources:
 
   LoadBalancerHttpListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    DependsOn: [LoadBalancer, TargetGroup]
+    DependsOn: TargetGroup
     Properties:
       DefaultActions:
         - TargetGroupArn: !Ref TargetGroup
@@ -86,35 +67,8 @@ Resources:
       Port: 80
       Protocol: HTTP
 
-  ECSCluster:
-    Type: AWS::ECS::Cluster
 
-  ECSTaskExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-        - Effect: Allow
-          Principal:
-            Service: [ecs-tasks.amazonaws.com]
-          Action: ['sts:AssumeRole']
-      Path: /
-      Policies:
-        - PolicyName: AmazonECSTaskExecutionRolePolicy
-          PolicyDocument:
-            Statement:
-            - Effect: Allow
-              Action:
-                # Allow the ECS Tasks to download images from ECR
-                - 'ecr:GetAuthorizationToken'
-                - 'ecr:BatchCheckLayerAvailability'
-                - 'ecr:GetDownloadUrlForLayer'
-                - 'ecr:BatchGetImage'
 
-                # Allow the ECS tasks to upload logs to CloudWatch
-                - 'logs:CreateLogStream'
-                - 'logs:PutLogEvents'
-              Resource: '*'
 
   ECSRole:
     Type: AWS::IAM::Role
@@ -151,8 +105,6 @@ Resources:
               - 'elasticloadbalancing:RegisterTargets'
             Resource: '*'
 
-
-
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties: 
@@ -161,7 +113,7 @@ Resources:
 
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
-    DependsOn: [ECSTaskExecutionRole, LogGroup]
+    DependsOn: LogGroup
     Properties:
       Family: 'echo'
       Cpu: '256'
@@ -169,7 +121,7 @@ Resources:
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      ExecutionRoleArn: !Ref EcsTaskExecutionRole
       #TaskRoleArn: !Ref ECSRole
       ContainerDefinitions:
         - Name: 'echo'
@@ -201,39 +153,9 @@ Resources:
       Priority: 100
 
 
-  FargateContainerSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Access to the Fargate containers
-      VpcId: !Ref Vpc
-
-  EcsSecurityGroupIngressFromPublicALB:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      Description: Ingress from the public ALB
-      GroupId: !Ref 'FargateContainerSecurityGroup'
-      IpProtocol: -1
-      SourceSecurityGroupId: !Ref LoadBalancersecurityGroup
-
-  EcsSecurityGroupIngressFromPrivateALB:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      Description: Ingress from the private ALB
-      GroupId: !Ref 'FargateContainerSecurityGroup'
-      IpProtocol: -1
-      SourceSecurityGroupId: !Ref LoadBalancersecurityGroup
-
-  EcsSecurityGroupIngressFromSelf:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      Description: Ingress from other containers in the same security group
-      GroupId: !Ref 'FargateContainerSecurityGroup'
-      IpProtocol: -1
-      SourceSecurityGroupId: !Ref 'FargateContainerSecurityGroup'
-
   Service:
     Type: AWS::ECS::Service
-    DependsOn: [FargateContainerSecurityGroup, ECSCluster, TaskDefinition, LoadBalancer, TargetGroup]
+    DependsOn: [TaskDefinition, TargetGroup]
     Properties:
       ServiceName: 'echo'
       Cluster: !Ref ECSCluster
