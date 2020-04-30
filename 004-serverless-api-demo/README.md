@@ -67,11 +67,11 @@ Example: `curl -X DELETE https://kyyvk41jk7.execute-api.eu-west-1.amazonaws.com/
 
 ##### Listing users:
 
-`curl https://kyyvk41jk7.execute-api.eu-west-1.amazonaws.com/api-demo/v1/users`
+`curl <API-URL>/api-demo/v1/users`
 
 or  
 
-`curl https://kyyvk41jk7.execute-api.eu-west-1.amazonaws.com/api-demo/v1/users?lastKey=<LAST-USER-ID-FROM-PREV-PAGE>`
+`curl <API-URL>/api-demo/v1/users?lastKey=<LAST-USER-ID-FROM-PREV-PAGE>`
 
 
 Examples: `curl https://kyyvk41jk7.execute-api.eu-west-1.amazonaws.com/api-demo/v1/users` or `curl https://kyyvk41jk7.execute-api.eu-west-1.amazonaws.com/api-demo/v1/users?lastKey=c09e008d-e510-4bb4-9851-dc425bf35088`
