@@ -37,7 +37,7 @@ Resources:
         - Fn::GetAZs: {Ref: 'AWS::Region'}
       VpcId: !Ref VPC
       CidrBlock: !FindInMap [Config, !Ref Env, PubSubnet1Cidr]
-      MapPublicIpOnLaunch: true
+      MapPublicIpOnLaunch: false
 
   PubSubnet2:
     Type: AWS::EC2::Subnet
@@ -48,7 +48,7 @@ Resources:
         - Fn::GetAZs: {Ref: 'AWS::Region'}
       VpcId: !Ref VPC
       CidrBlock: !FindInMap [Config, !Ref Env, PubSubnet2Cidr]
-      MapPublicIpOnLaunch: true
+      MapPublicIpOnLaunch: false
 
 
   PrivSubnet1:

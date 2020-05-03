@@ -67,8 +67,19 @@ Resources:
       Port: 80
       Protocol: HTTP
 
-
-
+  LoadBalancerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    DependsOn: [TargetGroup, LoadBalancerHttpListener]
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: 'forward'
+      Conditions:
+        - Field: path-pattern
+          Values: 
+          - '*'
+      ListenerArn: !Ref LoadBalancerHttpListener
+      Priority: 100
 
   ECSRole:
     Type: AWS::IAM::Role
@@ -138,19 +149,7 @@ Resources:
             - ContainerPort: 8080
               Protocol: 'tcp'
 
-  LoadBalancerRule:
-    Type: AWS::ElasticLoadBalancingV2::ListenerRule
-    DependsOn: [TargetGroup, LoadBalancerHttpListener]
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref TargetGroup
-          Type: 'forward'
-      Conditions:
-        - Field: path-pattern
-          Values: 
-          - '*'
-      ListenerArn: !Ref LoadBalancerHttpListener
-      Priority: 100
+
 
 
   Service:
@@ -167,7 +166,7 @@ Resources:
       DesiredCount: 1
       NetworkConfiguration:
         AwsvpcConfiguration:
-          AssignPublicIp: ENABLED
+          AssignPublicIp: DISABLED
           SecurityGroups:
             - !Ref FargateContainerSecurityGroup
           Subnets:
