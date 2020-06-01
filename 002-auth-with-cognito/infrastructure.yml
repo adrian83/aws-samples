@@ -1,0 +1,212 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+
+
+
+
+Resources:
+
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties: 
+      # AdminCreateUserConfig: 
+      #   AdminCreateUserConfig
+      AliasAttributes: 
+        - email
+      # AutoVerifiedAttributes: 
+      #   - email
+      # DeviceConfiguration: 
+      #   DeviceConfiguration
+      # EmailConfiguration: 
+      #   EmailConfiguration
+      # EmailVerificationMessage: String
+      # EmailVerificationSubject: String
+      # EnabledMfas: 
+      #   - String
+      # LambdaConfig: 
+      #   LambdaConfig
+      # MfaConfiguration: String
+      # Policies: 
+      #   Policies
+      # Schema: 
+      #   - SchemaAttribute
+      # SmsAuthenticationMessage: String
+      # SmsConfiguration: 
+      #   SmsConfiguration
+      # SmsVerificationMessage: String
+      # UsernameAttributes: 
+      #   - email
+      # UsernameConfiguration: 
+      #   UsernameConfiguration
+      # UserPoolAddOns: 
+      #   UserPoolAddOns
+      UserPoolName: users
+      # UserPoolTags: Json
+      # VerificationMessageTemplate: 
+      #   VerificationMessageTemplate 
+
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [lambda.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+      - PolicyName: cognito-policy
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+              - 'cognito-idp:*'
+            Resource: !GetAtt UserPool.Arn
+
+
+
+
+  RegisterUserLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: 'user-create'
+      Handler: index.lambda_handler
+      Runtime: python3.6
+      Timeout: 25
+      MemorySize: 128
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+      Role: !GetAtt LambdaRole.Arn
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Method: post
+            Path: /v1/auth/register
+            RestApiId: 
+              Ref: UserAPIGateway
+      InlineCode: |
+          from __future__ import print_function
+          import boto3
+          import json
+          import os
+          import uuid
+
+          user_pool_id = os.environ['USER_POOL_ID']
+          client = boto3.client('cognito-idp')
+
+
+          def lambda_handler(event, context):
+            print("event: {0}".format(event))
+
+            body = json.loads(event['body'])
+
+            if 'email' not in body:
+              print("cannot register user, invalid data: {0}".format(body))
+              return {"statusCode": 400, "body": "Invalid input"}
+
+            response = client.admin_create_user(
+                UserPoolId=user_pool_id,
+                Username=str(uuid.uuid4()),
+                UserAttributes=[
+                    {
+                        'Name': 'email',
+                        'Value': body['email']
+                    },
+                ],
+                TemporaryPassword='abcdefGHIJK1234!',
+                ForceAliasCreation=True,
+                DesiredDeliveryMediums=['EMAIL']
+            )
+
+            return {"statusCode": 201}
+
+
+
+  # UpdateUserLambda:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     FunctionName: 'user-update'
+  #     Handler: index.lambda_handler
+  #     Runtime: python3.6
+  #     Timeout: 25
+  #     MemorySize: 128
+  #     Policies:
+  #     - DynamoDBCrudPolicy:
+  #         TableName: !Ref UsersDynamoDBTable
+  #     Environment:
+  #       Variables:
+  #         USER_POOL: abcd
+  #     Events:
+  #       Api:
+  #         Type: Api
+  #         Properties:
+  #           Method: put
+  #           Path: /v1/users/{userId}
+  #           RestApiId: 
+  #             Ref: UserAPIGateway
+  #     InlineCode: |
+  #         from __future__ import print_function
+  #         import boto3
+  #         import json
+  #         import os
+
+  #         users_table = os.environ['USERS_TABLE_NAME']
+  #         dynamodb_client = boto3.client('dynamodb')
+
+  #         def lambda_handler(event, context):
+  #           print("event: {0}".format(event))
+
+  #           user_id = event['pathParameters']['userId']
+  #           body = json.loads(event['body'])
+
+  #           return {"statusCode": 200, "body": json.dumps({'id': user_id, 'firstName': first_name, 'lastName':last_name})}
+
+
+  # GetUserLambda:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     FunctionName: 'user-get'
+  #     Handler: index.lambda_handler
+  #     Runtime: python3.6
+  #     Timeout: 25
+  #     MemorySize: 128
+  #     Policies:
+  #     - DynamoDBCrudPolicy:
+  #         TableName: !Ref UsersDynamoDBTable
+  #     Environment:
+  #       Variables:
+  #         USER_POOL: abcd
+  #     Events:
+  #       Api:
+  #         Type: Api
+  #         Properties:
+  #           Method: get
+  #           Path: /v1/users/{userId}
+  #           RestApiId: 
+  #             Ref: UserAPIGateway
+  #     InlineCode: |
+  #         from __future__ import print_function
+  #         import boto3
+  #         import os
+  #         import json
+
+  #         users_table = os.environ['USERS_TABLE_NAME']
+  #         dynamodb_client = boto3.client('dynamodb')
+
+  #         def lambda_handler(event, context):
+  #           print("event: {0}".format(event))
+
+  #           return {"statusCode": 200}
+
+
+  UserAPIGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: 'cognito-demo-gateway'
+      StageName: 'cognito-demo'
+
+
+
