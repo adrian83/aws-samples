@@ -1,0 +1,24 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: App deployed on fargate.
+
+
+Resources:
+
+  VpcStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: ./vpc.yml
+      Parameters: 
+        BaseStackName: !Ref AWS::StackName
+
+  LoadBalancerStack:
+    DependsOn: VpcStack
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: ./loadbalancer.yml
+      Parameters:
+        BaseStackName: !Ref AWS::StackName
+        Vpc: !GetAtt VpcStack.Outputs.Vpc
+        ELBSubnet1: !GetAtt VpcStack.Outputs.PublicSubnet1 # todo change to private
+        ELBSubnet2: !GetAtt VpcStack.Outputs.PublicSubnet2

@@ -1,0 +1,52 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: Load Balancer configuration.
+
+Parameters:
+  Vpc:
+    Description: 'Vpc'
+    Type: String
+  ELBSubnet1:
+    Description: 'Subnet (1)'
+    Type: String
+  ELBSubnet2:
+    Description: 'Subnet (2)'
+    Type: String
+  BaseStackName: 
+    Description: 'Name of the base stack'
+    Type: String
+
+Resources:
+
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Access to the public facing load balancer
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+          # Allow access to ALB from anywhere on the internet
+          - CidrIp: 0.0.0.0/0
+            IpProtocol: -1
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+      - Key: idle_timeout.timeout_seconds
+        Value: '30'
+      Subnets:
+        # The load balancer is placed into the public subnets, so that traffic
+        # from the internet can reach the load balancer directly via the internet gateway
+        - !Ref ELBSubnet1
+        - !Ref ELBSubnet2
+      SecurityGroups: 
+        - !Ref LoadBalancerSecurityGroup
+
+Outputs:
+  LoadBalancerSecurityGroup:
+    Value: !Ref LoadBalancerSecurityGroup
+
+  LoadBalancer:
+    Value: !Ref LoadBalancer
+
