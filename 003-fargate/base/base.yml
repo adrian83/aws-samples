@@ -22,3 +22,13 @@ Resources:
         Vpc: !GetAtt VpcStack.Outputs.Vpc
         ELBSubnet1: !GetAtt VpcStack.Outputs.PublicSubnet1 # todo change to private
         ELBSubnet2: !GetAtt VpcStack.Outputs.PublicSubnet2
+
+  EcsStack:
+    DependsOn: LoadBalancerStack
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: ./ecs.yml
+      Parameters:
+        BaseStackName: !Ref AWS::StackName
+        Vpc: !GetAtt VpcStack.Outputs.Vpc
+        LoadBalancerSecurityGroup: !GetAtt LoadBalancerStack.Outputs.LoadBalancerSecurityGroup

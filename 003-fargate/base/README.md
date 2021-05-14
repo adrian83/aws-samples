@@ -1,6 +1,6 @@
 # Fargate demo
 
 
-aws cloudformation package --template-file base.yml --s3-bucket adrian-deployments --output-template-file packaged.yml
+aws cloudformation package --template-file fargate-echo.yml --s3-bucket adrian-deployments --output-template-file packaged.yml
 
-aws cloudformation deploy --template-file packaged.yml --capabilities CAPABILITY_AUTO_EXPAND --stack-name fargate-demo   
+aws cloudformation deploy --template-file packaged.yml --stack-name fargate-demo-echo
