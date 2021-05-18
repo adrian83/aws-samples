@@ -46,7 +46,10 @@ Resources:
 Outputs:
   LoadBalancerSecurityGroup:
     Value: !Ref LoadBalancerSecurityGroup
+    Export: 
+      Name: !Sub '${BaseStackName}-elb-security-group'
 
   LoadBalancer:
     Value: !Ref LoadBalancer
-
+    Export: 
+      Name: !Sub '${BaseStackName}-elb'

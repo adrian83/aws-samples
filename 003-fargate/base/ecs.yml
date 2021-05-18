@@ -88,9 +88,15 @@ Resources:
 Outputs:
   FargateContainerSecurityGroup:
     Value: !Ref FargateContainerSecurityGroup
+    Export: 
+      Name: !Sub '${BaseStackName}-container-sec-group'
     
   EcsTaskExecutionRole:
     Value: !Ref EcsTaskExecutionRole
+    Export: 
+      Name: !Sub '${BaseStackName}-ecs-task-exec-role'
 
   ECSCluster:
     Value: !Ref ECSCluster
+    Export: 
+      Name: !Sub '${BaseStackName}-ecs-cluster'

@@ -28,7 +28,7 @@ Resources:
     Type: AWS::EC2::VPC
     Properties:
       CidrBlock: !FindInMap [Config, !Ref Env, VpcCidr]
-      EnableDnsSupport: false
+      EnableDnsSupport: true
       EnableDnsHostnames: false
 
   # Specifies a subnet for a VPC.

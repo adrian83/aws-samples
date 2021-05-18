@@ -1,0 +1,168 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31' # TODO remove
+Description: Fargate configuration.
+
+Parameters:
+  BaseStackName: 
+    Description: 'Name of the base stack'
+    Type: String
+
+
+
+Resources:
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 15
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 14
+      HealthyThresholdCount: 3
+      TargetType: ip
+      Name: 'echo'
+      Port: 8080
+      Protocol: HTTP
+      UnhealthyThresholdCount: 2
+      VpcId: 
+        Fn::ImportValue:
+          !Sub '${BaseStackName}-vpc'
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '5'
+        - Key: slow_start.duration_seconds
+          Value: '150'
+
+
+  LoadBalancerHttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    DependsOn: TargetGroup
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: 'forward'
+      LoadBalancerArn:
+        Fn::ImportValue:
+          !Sub '${BaseStackName}-elb'
+      Port: 80
+      Protocol: HTTP
+
+  LoadBalancerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    DependsOn: [TargetGroup, LoadBalancerHttpListener]
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: 'forward'
+      Conditions:
+        - Field: path-pattern
+          Values: 
+          - '*'
+      ListenerArn: !Ref LoadBalancerHttpListener
+      Priority: 100
+
+  ECSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [ecs.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+      - PolicyName: ecs-service
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+              # Rules which allow ECS to attach network interfaces to instances
+              # on your behalf in order for awsvpc networking mode to work right
+              - 'ec2:AttachNetworkInterface'
+              - 'ec2:CreateNetworkInterface'
+              - 'ec2:CreateNetworkInterfacePermission'
+              - 'ec2:DeleteNetworkInterface'
+              - 'ec2:DeleteNetworkInterfacePermission'
+              - 'ec2:Describe*'
+              - 'ec2:DetachNetworkInterface'
+
+              # Rules which allow ECS to update load balancers on your behalf
+              # with the information sabout how to send traffic to your containers
+              - 'elasticloadbalancing:DeregisterInstancesFromLoadBalancer'
+              - 'elasticloadbalancing:DeregisterTargets'
+              - 'elasticloadbalancing:Describe*'
+              - 'elasticloadbalancing:RegisterInstancesWithLoadBalancer'
+              - 'elasticloadbalancing:RegisterTargets'
+            Resource: '*'
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties: 
+      LogGroupName: 'EchoServiceLogs'
+      RetentionInDays: 14
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn: LogGroup
+    Properties:
+      Family: 'echo'
+      Cpu: '256'
+      Memory: '0.5GB'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: 
+        Fn::ImportValue:
+          !Sub '${BaseStackName}-ecs-task-exec-role'
+      #TaskRoleArn: !Ref ECSRole
+      ContainerDefinitions:
+        - Name: 'echo'
+          #Cpu: !Ref 'ContainerCpu'
+          #Memory: !Ref 'ContainerMemory'
+          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/fargate-demo-repository:0.0.1'
+          LogConfiguration:
+            LogDriver: "awslogs"
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: "echo"
+          PortMappings:
+            - ContainerPort: 8080
+              Protocol: 'tcp'
+
+
+
+
+  Service:
+    Type: AWS::ECS::Service
+    DependsOn: [TaskDefinition, TargetGroup]
+    Properties:
+      ServiceName: 'echo'
+      Cluster: 
+        Fn::ImportValue:
+          !Sub '${BaseStackName}-ecs-cluster'
+      LaunchType: FARGATE
+      HealthCheckGracePeriodSeconds: 20
+      # DeploymentConfiguration:
+      #   MaximumPercent: 200
+      #   MinimumHealthyPercent: 75
+      DesiredCount: 1
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - Fn::ImportValue:
+                !Sub '${BaseStackName}-container-sec-group'
+          Subnets:
+            - Fn::ImportValue:
+                !Sub '${BaseStackName}-private-subnet-1'
+            - Fn::ImportValue:
+                !Sub '${BaseStackName}-private-subnet-2'
+      TaskDefinition: !Ref TaskDefinition
+      LoadBalancers:
+        - ContainerName: 'echo'
+          ContainerPort: 8080
+          TargetGroupArn: !Ref TargetGroup
+
+    
