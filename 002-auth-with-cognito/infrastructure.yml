@@ -13,8 +13,8 @@ Resources:
       #   AdminCreateUserConfig
       AliasAttributes: 
         - email
-      # AutoVerifiedAttributes: 
-      #   - email
+      AutoVerifiedAttributes: 
+        - email
       # DeviceConfiguration: 
       #   DeviceConfiguration
       # EmailConfiguration: 
@@ -45,6 +45,43 @@ Resources:
       # VerificationMessageTemplate: 
       #   VerificationMessageTemplate 
 
+  UserPoolClient:
+    DependsOn: UserPool
+    Type: AWS::Cognito::UserPoolClient
+    Properties: 
+      # AccessTokenValidity: Integer
+      # AllowedOAuthFlows: 
+      #   - String
+      # AllowedOAuthFlowsUserPoolClient: Boolean
+      # AllowedOAuthScopes: 
+      #   - String
+      # AnalyticsConfiguration: 
+      #   AnalyticsConfiguration
+      # CallbackURLs: 
+      #   - String
+      ClientName: MyClient
+      # DefaultRedirectURI: String
+      ExplicitAuthFlows: 
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_ADMIN_USER_PASSWORD_AUTH
+      GenerateSecret: False
+      # IdTokenValidity: Integer
+      # LogoutURLs: 
+      #   - String
+      # PreventUserExistenceErrors: String
+      # ReadAttributes: 
+      #   - String
+      # RefreshTokenValidity: Integer
+      # SupportedIdentityProviders: 
+      #   - String
+      # TokenValidityUnits: 
+      #   TokenValidityUnits
+      UserPoolId: !Ref UserPool
+      # WriteAttributes: 
+      #   - String
+
+
+
   LambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -70,7 +107,7 @@ Resources:
   RegisterUserLambda:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: 'user-create'
+      FunctionName: 'auth-register'
       Handler: index.lambda_handler
       Runtime: python3.6
       Timeout: 25
@@ -114,7 +151,7 @@ Resources:
                     {
                         'Name': 'email',
                         'Value': body['email']
-                    },
+                    }
                 ],
                 TemporaryPassword='abcdefGHIJK1234!',
                 ForceAliasCreation=True,
@@ -123,83 +160,78 @@ Resources:
 
             return {"statusCode": 201}
 
+  ChangePasswordLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: 'auth-changepassword'
+      Handler: index.lambda_handler
+      Runtime: python3.6
+      Timeout: 20
+      MemorySize: 128
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+      Role: !GetAtt LambdaRole.Arn
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Method: put
+            Path: /v1/auth/changepassword
+            RestApiId: 
+              Ref: UserAPIGateway
+      InlineCode: |
+          from __future__ import print_function
+          import boto3
+          import json
+          import os
+          import uuid
+
+          user_pool_id = os.environ['USER_POOL_ID']
+          user_pool_client_id = os.environ['USER_POOL_CLIENT_ID']
+
+          client = boto3.client('cognito-idp')
 
 
-  # UpdateUserLambda:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     FunctionName: 'user-update'
-  #     Handler: index.lambda_handler
-  #     Runtime: python3.6
-  #     Timeout: 25
-  #     MemorySize: 128
-  #     Policies:
-  #     - DynamoDBCrudPolicy:
-  #         TableName: !Ref UsersDynamoDBTable
-  #     Environment:
-  #       Variables:
-  #         USER_POOL: abcd
-  #     Events:
-  #       Api:
-  #         Type: Api
-  #         Properties:
-  #           Method: put
-  #           Path: /v1/users/{userId}
-  #           RestApiId: 
-  #             Ref: UserAPIGateway
-  #     InlineCode: |
-  #         from __future__ import print_function
-  #         import boto3
-  #         import json
-  #         import os
+          def lambda_handler(event, context):
+            print("event: {0}".format(event))
 
-  #         users_table = os.environ['USERS_TABLE_NAME']
-  #         dynamodb_client = boto3.client('dynamodb')
+            body = json.loads(event['body'])
 
-  #         def lambda_handler(event, context):
-  #           print("event: {0}".format(event))
+            if 'email' not in body or 'oldPassword' not in body or 'newPassword' not in body:
+              print("cannot change password, invalid data: {0}".format(body))
+              return {"statusCode": 400, "body": "Invalid input"}
 
-  #           user_id = event['pathParameters']['userId']
-  #           body = json.loads(event['body'])
+            username = body['email']
+            old_password = body['oldPassword']
+            new_password = body['newPassword']
 
-  #           return {"statusCode": 200, "body": json.dumps({'id': user_id, 'firstName': first_name, 'lastName':last_name})}
+            auth_params = {'USERNAME': username, 'PASSWORD': old_password}
 
+            auth_resp = client.admin_initiate_auth(
+                                                UserPoolId=user_pool_id,
+                                                ClientId=user_pool_client_id,
+                                                AuthFlow='ADMIN_NO_SRP_AUTH',
+                                                AuthParameters=auth_params)
 
-  # GetUserLambda:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     FunctionName: 'user-get'
-  #     Handler: index.lambda_handler
-  #     Runtime: python3.6
-  #     Timeout: 25
-  #     MemorySize: 128
-  #     Policies:
-  #     - DynamoDBCrudPolicy:
-  #         TableName: !Ref UsersDynamoDBTable
-  #     Environment:
-  #       Variables:
-  #         USER_POOL: abcd
-  #     Events:
-  #       Api:
-  #         Type: Api
-  #         Properties:
-  #           Method: get
-  #           Path: /v1/users/{userId}
-  #           RestApiId: 
-  #             Ref: UserAPIGateway
-  #     InlineCode: |
-  #         from __future__ import print_function
-  #         import boto3
-  #         import os
-  #         import json
+            print(str(auth_resp))
 
-  #         users_table = os.environ['USERS_TABLE_NAME']
-  #         dynamodb_client = boto3.client('dynamodb')
+            challenge_name = auth_resp.get('ChallengeName')
+            session = auth_resp.get('Session')
 
-  #         def lambda_handler(event, context):
-  #           print("event: {0}".format(event))
+            challenge_responses = {'USERNAME': username, 'NEW_PASSWORD': new_password}
 
-  #           return {"statusCode": 200}
+            chellange_response = client.admin_respond_to_auth_challenge(
+                                                              UserPoolId=user_pool_id,
+                                                              ClientId=user_pool_client_id,
+                                                              ChallengeName=challenge_name,
+                                                              ChallengeResponses=challenge_responses,
+                                                              Session=session)
+
+            print(str(chellange_response))
+
+            return {"statusCode": 200}
 
 
   UserAPIGateway:
