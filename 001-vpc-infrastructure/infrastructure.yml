@@ -11,10 +11,10 @@ Mappings:
   Config:
     dev:
       VpcCidr: '10.0.0.0/16'
-      PrivSubnet1Cidr: '10.0.0.0/24'
-      PrivSubnet2Cidr: '10.0.1.0/24'
-      PubSubnet1Cidr: '10.0.2.0/24'
-      PubSubnet2Cidr: '10.0.3.0/24'
+      PrivateSubnet1Cidr: '10.0.0.0/24'
+      PrivateSubnet2Cidr: '10.0.1.0/24'
+      PublicSubnet1Cidr: '10.0.2.0/24'
+      PublicSubnet2Cidr: '10.0.3.0/24'
 
 Resources:
 
@@ -24,51 +24,41 @@ Resources:
     Properties:
       CidrBlock: !FindInMap [Config, !Ref Env, VpcCidr]
       EnableDnsSupport: true
-      EnableDnsHostnames: true
+      EnableDnsHostnames: false
 
   # Specifies a subnet for a VPC.
-  PubSubnet1:
+  PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone:
-        Fn::Select:
-        - 0
-        - Fn::GetAZs: {Ref: 'AWS::Region'}
+      AvailabilityZone: !Select [0, !GetAZs { Ref: 'AWS::Region' }]
       VpcId: !Ref VPC
-      CidrBlock: !FindInMap [Config, !Ref Env, PubSubnet1Cidr]
+      CidrBlock: !FindInMap [Config, !Ref Env, PublicSubnet1Cidr]
       MapPublicIpOnLaunch: false
 
-  PubSubnet2:
+  PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone:
-        Fn::Select:
-        - 1
-        - Fn::GetAZs: {Ref: 'AWS::Region'}
+      AvailabilityZone: !Select [1, !GetAZs { Ref: 'AWS::Region' }]
       VpcId: !Ref VPC
-      CidrBlock: !FindInMap [Config, !Ref Env, PubSubnet2Cidr]
+      CidrBlock: !FindInMap [Config, !Ref Env, PublicSubnet2Cidr]
       MapPublicIpOnLaunch: false
 
 
-  PrivSubnet1:
+  PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone:
-        Fn::Select:
-        - 0
-        - Fn::GetAZs: {Ref: 'AWS::Region'}
-      VpcId: !Ref 'VPC'
-      CidrBlock: !FindInMap [Config, !Ref Env, PrivSubnet1Cidr]
+      AvailabilityZone: !Select [0, !GetAZs { Ref: 'AWS::Region' }]
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [Config, !Ref Env, PrivateSubnet1Cidr]
+      MapPublicIpOnLaunch: false
 
-  PrivSubnet2:
+  PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone:
-        Fn::Select:
-        - 1
-        - Fn::GetAZs: {Ref: 'AWS::Region'}
-      VpcId: !Ref 'VPC'
-      CidrBlock: !FindInMap [Config, !Ref Env, PrivSubnet2Cidr]
+      AvailabilityZone: !Select [1, !GetAZs { Ref: 'AWS::Region' }]
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [Config, !Ref Env, PrivateSubnet2Cidr]
+      MapPublicIpOnLaunch: false
 
 
   # Allocates an internet gateway for use with a VPC
@@ -108,18 +98,18 @@ Resources:
   # Associates a subnet with a route table. The subnet and route table must be in the same VPC. 
   # This association causes traffic originating from the subnet to be routed according to the 
   # routes in the route table. A route table can be associated with multiple subnets.
-  PubSubnet1RouteTableAssociation:
+  PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    DependsOn: [RouteTable, PubSubnet1]
+    DependsOn: [RouteTable, PublicSubnet1]
     Properties:
-      SubnetId: !Ref PubSubnet1
+      SubnetId: !Ref PublicSubnet1
       RouteTableId: !Ref RouteTable
 
-  PubSubnet2RouteTableAssociation:
+  PublicSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    DependsOn: [RouteTable, PubSubnet2]
+    DependsOn: [RouteTable, PublicSubnet2]
     Properties:
-      SubnetId: !Ref PubSubnet2
+      SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref RouteTable
 
 
@@ -145,17 +135,17 @@ Resources:
   # to other AWS services, but prevent the Internet from initiating a connection with those instances.
   NatGateway1:
     Type: AWS::EC2::NatGateway
-    DependsOn: [NatGateway1Attachment, PubSubnet1]
+    DependsOn: [NatGateway1Attachment, PublicSubnet1]
     Properties:
       AllocationId: !GetAtt NatGateway1Attachment.AllocationId
-      SubnetId: !Ref PubSubnet1
+      SubnetId: !Ref PublicSubnet1
 
   NatGateway2:
     Type: AWS::EC2::NatGateway
-    DependsOn: [NatGateway2Attachment, PubSubnet2]
+    DependsOn: [NatGateway2Attachment, PublicSubnet2]
     Properties:
       AllocationId: !GetAtt NatGateway2Attachment.AllocationId
-      SubnetId: !Ref PubSubnet2
+      SubnetId: !Ref PublicSubnet2
 
   # Specifies a route table for a specified VPC. After you create a route table, 
   # you can add routes and associate the table with a subnet.
@@ -193,15 +183,15 @@ Resources:
   # routes in the route table. A route table can be associated with multiple subnets.
   PrivRouteTable1Association:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    DependsOn: [PrivRouteTable1, PrivSubnet1]
+    DependsOn: [PrivRouteTable1, PrivateSubnet1]
     Properties:
       RouteTableId: !Ref PrivRouteTable1
-      SubnetId: !Ref PrivSubnet1
+      SubnetId: !Ref PrivateSubnet1
 
   PrivRouteTable2Association:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    DependsOn: [PrivRouteTable2, PrivSubnet2]
+    DependsOn: [PrivRouteTable2, PrivateSubnet2]
     Properties:
       RouteTableId: !Ref PrivRouteTable2
-      SubnetId: !Ref PrivSubnet2
+      SubnetId: !Ref PrivateSubnet2
 
