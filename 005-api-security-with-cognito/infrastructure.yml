@@ -1,0 +1,298 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+
+
+Resources:
+
+  UsersDynamoDBTable:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      TableName: 'users'
+      BillingMode: 'PAY_PER_REQUEST'
+      AttributeDefinitions:
+        - AttributeName: 'id'
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: 'id'
+          KeyType: 'HASH'
+
+
+  CreateUserLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: 'user-create'
+      Handler: index.lambda_handler
+      Runtime: python3.6
+      Timeout: 25
+      MemorySize: 128
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName: !Ref UsersDynamoDBTable
+      Environment:
+        Variables:
+          USERS_TABLE_NAME: !Ref UsersDynamoDBTable
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Method: post
+            Path: /v1/users
+            RestApiId: 
+              Ref: UserAPIGateway
+      InlineCode: |
+          from __future__ import print_function
+          import boto3
+          import json
+          import os
+          import uuid
+
+          users_table = os.environ['USERS_TABLE_NAME']
+          dynamodb_client = boto3.client('dynamodb')
+
+          def lambda_handler(event, context):
+            print("event: {0}".format(event))
+
+            body = json.loads(event['body'])
+
+            if 'firstName' not in body or 'lastName' not in body:
+              print("cannot persist user, invalid data: {0}".format(body))
+              return {"statusCode": 400, "body": "Invalid input"}
+
+            user_id = str(uuid.uuid4())
+            first_name = body['firstName']
+            last_name = body['lastName']
+
+            response = dynamodb_client.put_item(
+              TableName=users_table, 
+              Item={'id': {'S': user_id}, 'firstName': {'S': first_name}, 'lastName': {'S': last_name}})
+
+            if response['ResponseMetadata']['HTTPStatusCode'] != 200:
+              print("cannot put item: {0}".format(response))
+              return {"statusCode": 500, "body": "Internal server error: {0}".format(response)}
+
+            return {"statusCode": 201, "body": json.dumps({'id': user_id, 'firstName': first_name, 'lastName': last_name})}
+
+
+  ListUsersLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: 'user-list'
+      Handler: index.lambda_handler
+      Runtime: python3.6
+      Timeout: 25
+      MemorySize: 128
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName: !Ref UsersDynamoDBTable
+      Environment:
+        Variables:
+          USERS_TABLE_NAME: !Ref UsersDynamoDBTable
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Method: get
+            Path: /v1/users
+            RestApiId: 
+              Ref: UserAPIGateway
+      InlineCode: |
+          from __future__ import print_function
+          import boto3
+          import json
+          import os
+
+          LIMIT = 10
+
+          table_name = os.environ['USERS_TABLE_NAME']
+          dynamodb = boto3.resource('dynamodb')
+          users_table = dynamodb.Table(table_name)
+
+          def lambda_handler(event, context):
+            print("event: {0}".format(event))
+
+            get_params = event['queryStringParameters']
+            last_key = get_params['lastKey'] if get_params and 'lastKey' in get_params else None
+
+            response = users_table.scan(Limit=LIMIT, ExclusiveStartKey={'id': last_key}) if last_key else users_table.scan(Limit=LIMIT)
+
+            if response['ResponseMetadata']['HTTPStatusCode'] != 200:
+              print("cannot execute scaning: {0}".format(response))
+              return {"statusCode": 500, "body": "Internal server error: {0}".format(response)}
+
+            return {"statusCode": 200, "body": json.dumps({'users': response['Items']})}
+
+
+  UpdateUserLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: 'user-update'
+      Handler: index.lambda_handler
+      Runtime: python3.6
+      Timeout: 25
+      MemorySize: 128
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName: !Ref UsersDynamoDBTable
+      Environment:
+        Variables:
+          USERS_TABLE_NAME: !Ref UsersDynamoDBTable
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Method: put
+            Path: /v1/users/{userId}
+            RestApiId: 
+              Ref: UserAPIGateway
+      InlineCode: |
+          from __future__ import print_function
+          import boto3
+          import json
+          import os
+
+          users_table = os.environ['USERS_TABLE_NAME']
+          dynamodb_client = boto3.client('dynamodb')
+
+          def lambda_handler(event, context):
+            print("event: {0}".format(event))
+
+            user_id = event['pathParameters']['userId']
+            body = json.loads(event['body'])
+
+            if 'firstName' not in body or 'lastName' not in body:
+              print("cannot update user, invalid data: {0}".format(body))
+              return {"statusCode": 400, "body": "Invalid input"}
+
+            first_name = body['firstName']
+            last_name = body['lastName']
+
+            response = dynamodb_client.update_item(
+              TableName=users_table,
+              Key={'id': {'S': user_id}},
+              UpdateExpression="set firstName = :fn, lastName = :ln",
+              ExpressionAttributeValues={
+                ':fn': {'S': first_name},
+                ':ln': {'S': last_name}
+              },
+              ReturnValues="UPDATED_NEW"
+            )
+
+            if response['ResponseMetadata']['HTTPStatusCode'] != 200:
+              print("cannot update item: {0}".format(response))
+              return {"statusCode": 500, "body": "Internal server error: {0}".format(response)}
+
+            return {"statusCode": 200, "body": json.dumps({'id': user_id, 'firstName': first_name, 'lastName':last_name})}
+
+
+  DeleteUserLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: 'user-delete'
+      Handler: index.lambda_handler
+      Runtime: python3.6
+      Timeout: 25
+      MemorySize: 128
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName: !Ref UsersDynamoDBTable
+      Environment:
+        Variables:
+          USERS_TABLE_NAME: !Ref UsersDynamoDBTable
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Method: delete
+            Path: /v1/users/{userId}
+            RestApiId: 
+              Ref: UserAPIGateway
+      InlineCode: |
+          from __future__ import print_function
+          import boto3
+          import os
+
+          users_table = os.environ['USERS_TABLE_NAME']
+          dynamodb_client = boto3.client('dynamodb')
+
+          def lambda_handler(event, context):
+            print("event: {0}".format(event))
+
+            user_id = event['pathParameters']['userId']
+
+            response = dynamodb_client.delete_item(
+              TableName=users_table, 
+              Key={'id': {'S': user_id}})
+
+            if response['ResponseMetadata']['HTTPStatusCode'] != 200:
+              print("cannot delete item: {0}".format(response))
+              return {"statusCode": 500, "body": "Internal server error: {0}".format(response)}
+
+            return {"statusCode": 200}
+
+
+  GetUserLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: 'user-get'
+      Handler: index.lambda_handler
+      Runtime: python3.6
+      Timeout: 25
+      MemorySize: 128
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName: !Ref UsersDynamoDBTable
+      Environment:
+        Variables:
+          USERS_TABLE_NAME: !Ref UsersDynamoDBTable
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Method: get
+            Path: /v1/users/{userId}
+            RestApiId: 
+              Ref: UserAPIGateway
+      InlineCode: |
+          from __future__ import print_function
+          import boto3
+          import os
+          import json
+
+          users_table = os.environ['USERS_TABLE_NAME']
+          dynamodb_client = boto3.client('dynamodb')
+
+          def lambda_handler(event, context):
+            print("event: {0}".format(event))
+
+            user_id = event['pathParameters']['userId']
+
+            response = dynamodb_client.get_item(
+              TableName=users_table,
+              Key={ 'id': { 'S': user_id } }
+            )
+
+            if response['ResponseMetadata']['HTTPStatusCode'] != 200:
+              print("cannot get item: {0}".format(response))
+              return {"statusCode": 500, "body": "Internal server error: {0}".format(response)}
+            
+            if 'Item' not in response:
+              print("cannot get item with id: {0}".format(user_id))
+              return {"statusCode": 404}
+            
+            item = response['Item']
+
+            user = {
+              'id': item['id']['S'],
+              'firstName': item['firstName']['S'],
+              'lastName': item['lastName']['S']
+            }
+
+            return {"statusCode": 200, "body": json.dumps(user)}
+
+
+  UserAPIGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: 'users-api-gateway'
+      StageName: 'api-demo'
+

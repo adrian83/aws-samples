@@ -11,8 +11,8 @@ Resources:
     Properties: 
       # AdminCreateUserConfig: 
       #   AdminCreateUserConfig
-      AliasAttributes: 
-        - email
+#      AliasAttributes: 
+#        - email
       AutoVerifiedAttributes: 
         - email
       # DeviceConfiguration: 
@@ -110,7 +110,7 @@ Resources:
       FunctionName: 'auth-register'
       Handler: index.lambda_handler
       Runtime: python3.6
-      Timeout: 25
+      Timeout: 27
       MemorySize: 128
       Environment:
         Variables:
@@ -129,11 +129,9 @@ Resources:
           import boto3
           import json
           import os
-          import uuid
 
           user_pool_id = os.environ['USER_POOL_ID']
           client = boto3.client('cognito-idp')
-
 
           def lambda_handler(event, context):
             print("event: {0}".format(event))
@@ -144,13 +142,15 @@ Resources:
               print("cannot register user, invalid data: {0}".format(body))
               return {"statusCode": 400, "body": "Invalid input"}
 
+            email = body['email']
+
             response = client.admin_create_user(
                 UserPoolId=user_pool_id,
-                Username=str(uuid.uuid4()),
+                Username=email,
                 UserAttributes=[
                     {
                         'Name': 'email',
-                        'Value': body['email']
+                        'Value': email
                     }
                 ],
                 TemporaryPassword='abcdefGHIJK1234!',
@@ -166,7 +166,7 @@ Resources:
       FunctionName: 'auth-changepassword'
       Handler: index.lambda_handler
       Runtime: python3.6
-      Timeout: 20
+      Timeout: 27
       MemorySize: 128
       Environment:
         Variables:
@@ -177,7 +177,7 @@ Resources:
         Api:
           Type: Api
           Properties:
-            Method: put
+            Method: post
             Path: /v1/auth/changepassword
             RestApiId: 
               Ref: UserAPIGateway
@@ -232,6 +232,120 @@ Resources:
             print(str(chellange_response))
 
             return {"statusCode": 200}
+
+  SignInLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: 'auth-signin'
+      Handler: index.lambda_handler
+      Runtime: python3.6
+      Timeout: 28
+      MemorySize: 128
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+      Role: !GetAtt LambdaRole.Arn
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Method: post
+            Path: /v1/auth/signin
+            RestApiId: 
+              Ref: UserAPIGateway
+      InlineCode: |
+          from __future__ import print_function
+          import boto3
+          import json
+          import os
+
+          user_pool_id = os.environ['USER_POOL_ID']
+          user_pool_client_id = os.environ['USER_POOL_CLIENT_ID']
+
+          client = boto3.client('cognito-idp')
+
+          def lambda_handler(event, context):
+            print("event: {0}".format(event))
+
+            body = json.loads(event['body'])
+
+            if 'email' not in body or 'password' not in body:
+              print("cannot sing in user, invalid data: {0}".format(body))
+              return {"statusCode": 400, "body": "Invalid input"}
+
+            response = client.admin_initiate_auth(
+                                            UserPoolId=user_pool_id,
+                                            ClientId=user_pool_client_id,
+                                            AuthFlow='ADMIN_NO_SRP_AUTH',
+                                            AuthParameters={
+                                              'USERNAME': body['email'],
+                                              'PASSWORD': body['password']
+                                            }
+                                        )
+
+            print(str(response))
+
+            tokens = {
+              "accessToken": response['AuthenticationResult']['AccessToken'],
+              "idToken": response['AuthenticationResult']['IdToken'],
+              "refreshToken": response['AuthenticationResult']['RefreshToken']
+            }
+
+            return {"statusCode": 200, "body": json.dumps(tokens)}
+
+
+
+  SignOutLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: 'auth-signout'
+      Handler: index.lambda_handler
+      Runtime: python3.6
+      Timeout: 28
+      MemorySize: 128
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+      Role: !GetAtt LambdaRole.Arn
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Method: post
+            Path: /v1/auth/signout
+            RestApiId: 
+              Ref: UserAPIGateway
+      InlineCode: |
+          from __future__ import print_function
+          import boto3
+          import json
+
+          client = boto3.client('cognito-idp')
+
+          def lambda_handler(event, context):
+            print("event: {0}".format(event))
+
+            body = json.loads(event['body'])
+
+            if 'token' not in body:
+              print("cannot sing out user, invalid data: {0}".format(body))
+              return {"statusCode": 400, "body": "Invalid input"}
+
+            response = client.global_sign_out(
+                                        AccessToken=body['token']
+                                          )
+
+            print(str(response))
+
+            return {"statusCode": 200}
+
+
+
+
+
+
 
 
   UserAPIGateway:
