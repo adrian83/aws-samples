@@ -81,6 +81,23 @@ Resources:
       #   - String
 
 
+  UserAPIGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: 'cognito-demo-gateway'
+      StageName: 'cognito-demo'
+      Auth:
+        ApiKeyRequired: false
+        Authorizers:
+          MyCognitoAuthorizer:
+            AuthType: "COGNITO_USER_POOLS"
+            UserPoolArn: !GetAtt UserPool.Arn
+        DefaultAuthorizer: MyCognitoAuthorizer
+
+
+
+
+
 
   LambdaRole:
     Type: AWS::IAM::Role
@@ -124,6 +141,8 @@ Resources:
             Path: /v1/auth/register
             RestApiId: 
               Ref: UserAPIGateway
+            Auth:
+              Authorizer: NONE
       InlineCode: |
           from __future__ import print_function
           import boto3
@@ -181,6 +200,8 @@ Resources:
             Path: /v1/auth/changepassword
             RestApiId: 
               Ref: UserAPIGateway
+            Auth:
+              Authorizer: NONE
       InlineCode: |
           from __future__ import print_function
           import boto3
@@ -254,6 +275,8 @@ Resources:
             Path: /v1/auth/signin
             RestApiId: 
               Ref: UserAPIGateway
+            Auth:
+              Authorizer: NONE
       InlineCode: |
           from __future__ import print_function
           import boto3
@@ -317,6 +340,8 @@ Resources:
             Path: /v1/auth/signout
             RestApiId: 
               Ref: UserAPIGateway
+            Auth:
+              Authorizer: NONE
       InlineCode: |
           from __future__ import print_function
           import boto3
@@ -342,17 +367,39 @@ Resources:
             return {"statusCode": 200}
 
 
-
-
-
-
-
-
-  UserAPIGateway:
-    Type: AWS::Serverless::Api
+  SecuredLambda:
+    Type: AWS::Serverless::Function
     Properties:
-      Name: 'cognito-demo-gateway'
-      StageName: 'cognito-demo'
+      FunctionName: secured
+      Handler: index.lambda_handler
+      Runtime: python3.6
+      Timeout: 29
+      MemorySize: 128
+      Role: !GetAtt LambdaRole.Arn
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Method: post
+            Path: /v1/secured
+            RestApiId: 
+              Ref: UserAPIGateway
+      InlineCode: |
+          from __future__ import print_function
+          import json
+
+          def lambda_handler(event, context):
+
+            print(str(event))
+            print(str(context))
+
+            resp = {
+              "message": "well hello"
+            }
+
+            return {"statusCode": 200, "body": json.dumps(resp)}
+
+
 
 
 
