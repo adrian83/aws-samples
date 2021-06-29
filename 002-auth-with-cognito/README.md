@@ -1,5 +1,7 @@
 # Cognito demo
 
+## WORK IN PROGRESS
+
 
 ## Deployment:  
 
@@ -118,7 +120,7 @@ You should see response with status code 200 and body that looks something like 
 ```
 
 
-### Sign out
+### Sign out (!!! doesn't work yet !!!)
 
 ```
 curl -v --request POST \

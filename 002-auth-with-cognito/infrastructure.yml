@@ -2,8 +2,6 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: 'AWS::Serverless-2016-10-31'
 
 
-
-
 Resources:
 
   UserPool:
@@ -11,17 +9,18 @@ Resources:
     Properties: 
       AutoVerifiedAttributes: 
         - email
-      UserPoolName: users
+      UserPoolName: cognito-demo-users
 
 
   UserPoolClient:
     DependsOn: UserPool
     Type: AWS::Cognito::UserPoolClient
     Properties: 
-      ClientName: MyClient
+      ClientName: cognito-demo-client
       ExplicitAuthFlows: 
         - ALLOW_REFRESH_TOKEN_AUTH
         - ALLOW_ADMIN_USER_PASSWORD_AUTH
+      EnableTokenRevocation: true
       GenerateSecret: False
       UserPoolId: !Ref UserPool
 
@@ -29,8 +28,8 @@ Resources:
   UserAPIGateway:
     Type: AWS::Serverless::Api
     Properties:
-      Name: 'cognito-demo-gateway'
-      StageName: 'cognito-demo'
+      Name: cognito-demo-gateway
+      StageName: cognito-demo
       Auth:
         ApiKeyRequired: false
         Authorizers:
@@ -67,9 +66,9 @@ Resources:
   RegisterUserLambda:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: 'auth-register'
+      FunctionName: auth-register
       Handler: index.lambda_handler
-      Runtime: python3.6
+      Runtime: python3.7
       Timeout: 25
       MemorySize: 128
       Environment:
@@ -120,12 +119,13 @@ Resources:
 
             return {"statusCode": 201}
 
+
   ChangePasswordLambda:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: 'auth-setpassword'
+      FunctionName: auth-setpassword
       Handler: index.lambda_handler
-      Runtime: python3.6
+      Runtime: python3.7
       Timeout: 25
       MemorySize: 128
       Environment:
@@ -187,12 +187,13 @@ Resources:
 
             return {"statusCode": 200}
 
+
   SignInLambda:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: 'auth-signin'
+      FunctionName: auth-signin
       Handler: index.lambda_handler
-      Runtime: python3.6
+      Runtime: python3.7
       Timeout: 25
       MemorySize: 128
       Environment:
@@ -247,15 +248,17 @@ Resources:
             return {"statusCode": 200, "body": json.dumps(tokens)}
 
 
-
   SignOutLambda:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: 'auth-signout'
+      FunctionName: auth-signout
       Handler: index.lambda_handler
-      Runtime: python3.6
+      Runtime: python3.7
       Timeout: 25
       MemorySize: 128
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID: !Ref UserPoolClient
       Role: !GetAtt LambdaRole.Arn
       Events:
         Api:
@@ -270,6 +273,9 @@ Resources:
       InlineCode: |
           import boto3
           import json
+          import os
+
+          user_pool_client_id = os.environ['USER_POOL_CLIENT_ID']
 
           client = boto3.client('cognito-idp')
 
@@ -281,7 +287,10 @@ Resources:
               print("cannot sing out user, invalid data: {0}".format(body))
               return {"statusCode": 400, "body": "Invalid input"}
 
-            response = client.global_sign_out(AccessToken=body['token'])
+            response = client.revoke_token(
+                                        Token=body['token'],
+                                        ClientId=user_pool_client_id
+                                        )
 
             return {"statusCode": 200}
 
@@ -291,7 +300,7 @@ Resources:
     Properties:
       FunctionName: secured
       Handler: index.lambda_handler
-      Runtime: python3.6
+      Runtime: python3.7
       Timeout: 25
       MemorySize: 128
       Role: !GetAtt LambdaRole.Arn
@@ -315,8 +324,4 @@ Resources:
             }
 
             return {"statusCode": 200, "body": json.dumps(resp)}
-
-
-
-
 
