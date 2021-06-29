@@ -9,76 +9,21 @@ Resources:
   UserPool:
     Type: AWS::Cognito::UserPool
     Properties: 
-      # AdminCreateUserConfig: 
-      #   AdminCreateUserConfig
-#      AliasAttributes: 
-#        - email
       AutoVerifiedAttributes: 
         - email
-      # DeviceConfiguration: 
-      #   DeviceConfiguration
-      # EmailConfiguration: 
-      #   EmailConfiguration
-      # EmailVerificationMessage: String
-      # EmailVerificationSubject: String
-      # EnabledMfas: 
-      #   - String
-      # LambdaConfig: 
-      #   LambdaConfig
-      # MfaConfiguration: String
-      # Policies: 
-      #   Policies
-      # Schema: 
-      #   - SchemaAttribute
-      # SmsAuthenticationMessage: String
-      # SmsConfiguration: 
-      #   SmsConfiguration
-      # SmsVerificationMessage: String
-      # UsernameAttributes: 
-      #   - email
-      # UsernameConfiguration: 
-      #   UsernameConfiguration
-      # UserPoolAddOns: 
-      #   UserPoolAddOns
       UserPoolName: users
-      # UserPoolTags: Json
-      # VerificationMessageTemplate: 
-      #   VerificationMessageTemplate 
+
 
   UserPoolClient:
     DependsOn: UserPool
     Type: AWS::Cognito::UserPoolClient
     Properties: 
-      # AccessTokenValidity: Integer
-      # AllowedOAuthFlows: 
-      #   - String
-      # AllowedOAuthFlowsUserPoolClient: Boolean
-      # AllowedOAuthScopes: 
-      #   - String
-      # AnalyticsConfiguration: 
-      #   AnalyticsConfiguration
-      # CallbackURLs: 
-      #   - String
       ClientName: MyClient
-      # DefaultRedirectURI: String
       ExplicitAuthFlows: 
         - ALLOW_REFRESH_TOKEN_AUTH
         - ALLOW_ADMIN_USER_PASSWORD_AUTH
       GenerateSecret: False
-      # IdTokenValidity: Integer
-      # LogoutURLs: 
-      #   - String
-      # PreventUserExistenceErrors: String
-      # ReadAttributes: 
-      #   - String
-      # RefreshTokenValidity: Integer
-      # SupportedIdentityProviders: 
-      #   - String
-      # TokenValidityUnits: 
-      #   TokenValidityUnits
       UserPoolId: !Ref UserPool
-      # WriteAttributes: 
-      #   - String
 
 
   UserAPIGateway:
@@ -93,10 +38,6 @@ Resources:
             AuthType: "COGNITO_USER_POOLS"
             UserPoolArn: !GetAtt UserPool.Arn
         DefaultAuthorizer: MyCognitoAuthorizer
-
-
-
-
 
 
   LambdaRole:
@@ -117,8 +58,10 @@ Resources:
             Action:
               - 'cognito-idp:*'
             Resource: !GetAtt UserPool.Arn
-
-
+          - Effect: Allow
+            Action:
+              - 'logs:*'
+            Resource: 'arn:aws:logs:*:*:*'
 
 
   RegisterUserLambda:
@@ -127,7 +70,7 @@ Resources:
       FunctionName: 'auth-register'
       Handler: index.lambda_handler
       Runtime: python3.6
-      Timeout: 27
+      Timeout: 25
       MemorySize: 128
       Environment:
         Variables:
@@ -144,7 +87,6 @@ Resources:
             Auth:
               Authorizer: NONE
       InlineCode: |
-          from __future__ import print_function
           import boto3
           import json
           import os
@@ -153,7 +95,6 @@ Resources:
           client = boto3.client('cognito-idp')
 
           def lambda_handler(event, context):
-            print("event: {0}".format(event))
 
             body = json.loads(event['body'])
 
@@ -182,10 +123,10 @@ Resources:
   ChangePasswordLambda:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: 'auth-changepassword'
+      FunctionName: 'auth-setpassword'
       Handler: index.lambda_handler
       Runtime: python3.6
-      Timeout: 27
+      Timeout: 25
       MemorySize: 128
       Environment:
         Variables:
@@ -197,31 +138,27 @@ Resources:
           Type: Api
           Properties:
             Method: post
-            Path: /v1/auth/changepassword
+            Path: /v1/auth/setpassword
             RestApiId: 
               Ref: UserAPIGateway
             Auth:
               Authorizer: NONE
       InlineCode: |
-          from __future__ import print_function
           import boto3
           import json
           import os
-          import uuid
 
           user_pool_id = os.environ['USER_POOL_ID']
           user_pool_client_id = os.environ['USER_POOL_CLIENT_ID']
 
           client = boto3.client('cognito-idp')
 
-
           def lambda_handler(event, context):
-            print("event: {0}".format(event))
 
             body = json.loads(event['body'])
 
             if 'email' not in body or 'oldPassword' not in body or 'newPassword' not in body:
-              print("cannot change password, invalid data: {0}".format(body))
+              print("cannot set password, invalid data: {0}".format(body))
               return {"statusCode": 400, "body": "Invalid input"}
 
             username = body['email']
@@ -236,8 +173,6 @@ Resources:
                                                 AuthFlow='ADMIN_NO_SRP_AUTH',
                                                 AuthParameters=auth_params)
 
-            print(str(auth_resp))
-
             challenge_name = auth_resp.get('ChallengeName')
             session = auth_resp.get('Session')
 
@@ -250,8 +185,6 @@ Resources:
                                                               ChallengeResponses=challenge_responses,
                                                               Session=session)
 
-            print(str(chellange_response))
-
             return {"statusCode": 200}
 
   SignInLambda:
@@ -260,7 +193,7 @@ Resources:
       FunctionName: 'auth-signin'
       Handler: index.lambda_handler
       Runtime: python3.6
-      Timeout: 28
+      Timeout: 25
       MemorySize: 128
       Environment:
         Variables:
@@ -278,7 +211,6 @@ Resources:
             Auth:
               Authorizer: NONE
       InlineCode: |
-          from __future__ import print_function
           import boto3
           import json
           import os
@@ -289,7 +221,6 @@ Resources:
           client = boto3.client('cognito-idp')
 
           def lambda_handler(event, context):
-            print("event: {0}".format(event))
 
             body = json.loads(event['body'])
 
@@ -307,8 +238,6 @@ Resources:
                                             }
                                         )
 
-            print(str(response))
-
             tokens = {
               "accessToken": response['AuthenticationResult']['AccessToken'],
               "idToken": response['AuthenticationResult']['IdToken'],
@@ -325,12 +254,8 @@ Resources:
       FunctionName: 'auth-signout'
       Handler: index.lambda_handler
       Runtime: python3.6
-      Timeout: 28
+      Timeout: 25
       MemorySize: 128
-      Environment:
-        Variables:
-          USER_POOL_ID: !Ref UserPool
-          USER_POOL_CLIENT_ID: !Ref UserPoolClient
       Role: !GetAtt LambdaRole.Arn
       Events:
         Api:
@@ -343,14 +268,12 @@ Resources:
             Auth:
               Authorizer: NONE
       InlineCode: |
-          from __future__ import print_function
           import boto3
           import json
 
           client = boto3.client('cognito-idp')
 
           def lambda_handler(event, context):
-            print("event: {0}".format(event))
 
             body = json.loads(event['body'])
 
@@ -358,11 +281,7 @@ Resources:
               print("cannot sing out user, invalid data: {0}".format(body))
               return {"statusCode": 400, "body": "Invalid input"}
 
-            response = client.global_sign_out(
-                                        AccessToken=body['token']
-                                          )
-
-            print(str(response))
+            response = client.global_sign_out(AccessToken=body['token'])
 
             return {"statusCode": 200}
 
@@ -373,28 +292,26 @@ Resources:
       FunctionName: secured
       Handler: index.lambda_handler
       Runtime: python3.6
-      Timeout: 29
+      Timeout: 25
       MemorySize: 128
       Role: !GetAtt LambdaRole.Arn
       Events:
         Api:
           Type: Api
           Properties:
-            Method: post
+            Method: get
             Path: /v1/secured
             RestApiId: 
               Ref: UserAPIGateway
       InlineCode: |
-          from __future__ import print_function
           import json
 
           def lambda_handler(event, context):
 
-            print(str(event))
-            print(str(context))
+            email = event['requestContext']['authorizer']['claims']['email']
 
             resp = {
-              "message": "well hello"
+              "message": f"Hello {email}"
             }
 
             return {"statusCode": 200, "body": json.dumps(resp)}
