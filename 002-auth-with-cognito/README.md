@@ -120,19 +120,20 @@ You should see response with status code 200 and body that looks something like 
 ```
 
 
-### Sign out (!!! doesn't work yet !!!)
+### Sign out
+#### This is very unintuitive, more info [here](https://docs.aws.amazon.com/cognito/latest/developerguide/token-revocation.html)
 
 ```
 curl -v --request POST \
   --url $API_URL/v1/auth/signout \
   --header 'Content-Type: application/json' \
   --data '{
-	"token":"<access-token>"
+	"token":"<refresh-token>"
 }'
 ```
 
 
-### Access 'secured' endpoint (with invalid auth header)
+### Access 'secured' endpoint with too old auth header (older then 2h)
 
 ```
 curl -v --request GET \

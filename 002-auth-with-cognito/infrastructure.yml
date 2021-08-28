@@ -7,6 +7,7 @@ Resources:
   UserPool:
     Type: AWS::Cognito::UserPool
     Properties: 
+      AccessTokenValidity: 60
       AutoVerifiedAttributes: 
         - email
       UserPoolName: cognito-demo-users
