@@ -1,6 +1,4 @@
-# Cognito demo
-
-## WORK IN PROGRESS
+# Auth with Cognito
 
 
 ## Deployment:  
@@ -15,6 +13,7 @@ aws cloudformation deploy --template-file infrastructure.yml --stack-name cognit
 ```
 aws cloudformation delete-stack --stack-name cognito-demo
 ```
+
 
 ## Testing
 
@@ -38,8 +37,6 @@ echo "API Gateway id: $API_ID"
 API_URL="https://$API_ID.execute-api.$REGION.amazonaws.com/cognito-demo"
 echo "API Gateway URL: $API_URL"
 ```
-
-
 
 
 ### Register
@@ -66,11 +63,13 @@ curl -v --request POST \
 }'
 ```
 
+
 ### Access 'secured' endpoint (without auth header)
 ```
 curl -v --request GET \
   --url $API_URL/v1/secured
 ```
+
 
 You should see response with status code 401 and body that looks something like that:
 ```
@@ -78,7 +77,6 @@ You should see response with status code 401 and body that looks something like 
   "message": "Unauthorized"
 }
 ```
-
 
 
 ### Sign in
@@ -133,7 +131,9 @@ curl -v --request POST \
 ```
 
 
-### Access 'secured' endpoint with too old auth header (older then 2h)
+
+
+### Access 'secured' endpoint with invalid auth header (older then 1h)
 
 ```
 curl -v --request GET \
@@ -148,3 +148,23 @@ You should see response with status code 401 and body that looks something like 
 }
 ```
 
+
+### Refresh tokens 
+
+```
+curl -v --request POST \
+  --url $API_URL/v1/auth/refreshtoken \
+  --header 'Content-Type: application/json' \
+  --data '{
+	"token":"<refresh-token>"
+}'
+```
+
+
+You should see response with status code 200 and body that looks something like that:
+```
+{
+  "accessToken": "<access-token>",
+  "idToken": "<id-token>"
+}
+```

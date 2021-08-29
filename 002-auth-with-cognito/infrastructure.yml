@@ -7,7 +7,6 @@ Resources:
   UserPool:
     Type: AWS::Cognito::UserPool
     Properties: 
-      AccessTokenValidity: 60
       AutoVerifiedAttributes: 
         - email
       UserPoolName: cognito-demo-users
@@ -24,6 +23,13 @@ Resources:
       EnableTokenRevocation: true
       GenerateSecret: False
       UserPoolId: !Ref UserPool
+      TokenValidityUnits:
+        AccessToken: 'minutes'
+        IdToken: 'minutes'
+        RefreshToken: 'minutes'
+      AccessTokenValidity: 60
+      IdTokenValidity: 60
+      RefreshTokenValidity: 600
 
 
   UserAPIGateway:
@@ -244,6 +250,66 @@ Resources:
               "accessToken": response['AuthenticationResult']['AccessToken'],
               "idToken": response['AuthenticationResult']['IdToken'],
               "refreshToken": response['AuthenticationResult']['RefreshToken']
+            }
+
+            return {"statusCode": 200, "body": json.dumps(tokens)}
+
+
+  RefreshTokenLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: auth-refreshtoken
+      Handler: index.lambda_handler
+      Runtime: python3.7
+      Timeout: 25
+      MemorySize: 128
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+      Role: !GetAtt LambdaRole.Arn
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Method: post
+            Path: /v1/auth/refreshtoken
+            RestApiId: 
+              Ref: UserAPIGateway
+            Auth:
+              Authorizer: NONE
+      InlineCode: |
+          import boto3
+          import json
+          import os
+
+          user_pool_id = os.environ['USER_POOL_ID']
+          user_pool_client_id = os.environ['USER_POOL_CLIENT_ID']
+
+          client = boto3.client('cognito-idp')
+
+          def lambda_handler(event, context):
+
+            body = json.loads(event['body'])
+
+            if 'token' not in body:
+              print("cannot refresh token, invalid data: {0}".format(body))
+              return {"statusCode": 400, "body": "Invalid input"}
+
+            response = client.admin_initiate_auth(
+                                            UserPoolId=user_pool_id,
+                                            ClientId=user_pool_client_id,
+                                            AuthFlow='REFRESH_TOKEN_AUTH',
+                                            AuthParameters={
+                                              'REFRESH_TOKEN': body['token']
+                                            }
+                                        )
+
+            print(response)
+
+            tokens = {
+              "accessToken": response['AuthenticationResult']['AccessToken'],
+              "idToken": response['AuthenticationResult']['IdToken']
             }
 
             return {"statusCode": 200, "body": json.dumps(tokens)}
